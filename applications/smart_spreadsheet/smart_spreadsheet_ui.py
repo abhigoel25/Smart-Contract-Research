@@ -48,6 +48,7 @@ with st.sidebar:
     st.subheader("AType")
     
     type_model = st.data_editor(
+        ## TODO:  get_pydantic_fields debug  
         get_pydantic_fields(st.session_state.ag.atype),
         num_rows="dynamic",
         use_container_width=True,

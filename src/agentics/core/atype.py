@@ -43,17 +43,61 @@ def copy_attribute_values(
     setattr(state, target_attribute, source_value)
     return state
 
-def get_pydantic_fields(atype: Type[BaseModel]) -> pd.DataFrame:
-    rows = []
+
+import pandas as pd
+from typing import Type
+from pydantic import BaseModel
+
+def get_pydantic_fields(atype: Type[BaseModel]):
+    """
+    Extract Pydantic model fields and return them in the same
+    structure used by Streamlit's st.session_state.fields.
+    """
+    fields_list = []
+
     for field_name, field in atype.model_fields.items():
-        rows.append({
-            "Field": field_name,
-            "Type": str(field.annotation),         # Type annotation
-            "Description": field.description       # Description from Field(...)
+        # Determine if optional
+        optional = field.is_required() is False
+
+        # Extract annotation (clean type string)
+        type_label = str(field.annotation)
+        # remove typing artifacts like "<class 'int'>" -> "int"
+        if type_label.startswith("<class"):
+            type_label = type_label.split("'")[1]
+
+        # Default handling
+        has_default = field.default is not None or field.default_factory is not None
+        default_val = None
+
+        if field.default_factory is not None:
+            default_val = f"{field.default_factory.__name__}()"
+        elif field.default is not None and field.default is not Ellipsis:
+            default_val = field.default
+
+        # Add to list
+        fields_list.append({
+            "name": field_name,
+            "type_label": type_label,
+            "optional": optional,
+            "use_default": has_default,
+            "default_value": default_val,
+            "description": field.description or "",
         })
 
-    # Create DataFrame
-    return pd.DataFrame(rows)
+    return fields_list
+
+
+# def get_pydantic_fields(atype: Type[BaseModel]) -> pd.DataFrame:
+#     rows = []
+#     for field_name, field in atype.model_fields.items():
+#         rows.append({
+#             "Field": field_name,
+#             "Type": str(field.annotation),         # Type annotation
+#             "Description": field.description       # Description from Field(...)
+#         })
+
+#     # Create DataFrame
+#     return pd.DataFrame(rows)
 
 
 def get_active_fields(state: BaseModel, allowed_fields: Set[str] = None) -> Set[str]:
@@ -255,10 +299,10 @@ from typing import (
 from pydantic import BaseModel, Field
 from typing import get_origin, get_args
 import datetime
-
-def import_pydantic_from_string(code: str, class_name: str):
+def import_pydantic_from_string(code: str):
     """
-    Dynamically execute Pydantic class code and return the class object.
+    Dynamically execute Pydantic class code and return the first
+    Pydantic BaseModel subclass defined in it.
 
     Automatically injects basic typing symbols and pydantic imports
     so the code can safely reference them even if not explicitly imported.
@@ -266,13 +310,13 @@ def import_pydantic_from_string(code: str, class_name: str):
     # Create isolated module namespace
     module = types.ModuleType("dynamic_module")
 
-    # Preload basic globals that the generated code may need
+    # Preload common symbols that generated code may need
     safe_globals = {
         "__builtins__": __builtins__,
-        # Core pydantic symbols
+        # Core Pydantic symbols
         "BaseModel": BaseModel,
         "Field": Field,
-        # Typing symbols
+        # Common typing imports
         "Any": Any,
         "Optional": Optional,
         "List": List,
@@ -289,19 +333,91 @@ def import_pydantic_from_string(code: str, class_name: str):
         "datetime": datetime,
     }
 
-    # Merge into module namespace
     module.__dict__.update(safe_globals)
 
-    # Execute the generated code safely
+    # Execute the generated code
     exec(code, module.__dict__)
 
-    # Retrieve the requested class
-    if not hasattr(module, class_name):
-        raise ValueError(f"Class '{class_name}' not found in generated code.")
-    cls = getattr(module, class_name)
+    # Automatically find the first Pydantic model class
+    classes = [
+        obj for obj in module.__dict__.values()
+        if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel
+    ]
 
-    # Basic sanity check
-    if not issubclass(cls, BaseModel):
-        raise TypeError(f"{class_name} is not a subclass of BaseModel")
+    if not classes:
+        raise ValueError("No Pydantic BaseModel subclass found in the provided code.")
 
-    return cls
+    # Return the first detected model class
+    return classes[-1]
+
+
+def normalize_type_label(label: str | None) -> tuple[str, bool]:
+    """
+    Normalize various annotation spellings to UI labels and detect Optional:
+    - <class 'int'>           -> ("int", False)
+    - typing.List[str]        -> ("list[str]", False)
+    - datetime.date           -> ("date", False)
+    - Optional[int]           -> ("int", True)
+    - Union[int, None]        -> ("int", True)
+    - int | None              -> ("int", True)
+    - Literal['A','B']        -> ("Literal['A','B']", False)
+    """
+    def _base_normalize(s: str) -> str:
+        # <class 'int'> -> int
+        if s.startswith("<class '") and s.endswith("'>"):
+            return s.split("'")[1]
+
+        # strip typing. prefixes
+        s = s.replace("typing.", "")
+
+        # datetime -> short labels
+        s = s.replace("datetime.date", "date").replace("datetime.datetime", "datetime")
+
+        # List/Dict/Tuple -> lowercase generics
+        s = s.replace("List[", "list[").replace("Dict[", "dict[").replace("Tuple[", "tuple[")
+
+        # Canonicalize list[...] inner
+        if s.startswith("list[") and s.endswith("]"):
+            inner = s[5:-1].strip()
+            inner = inner.replace("typing.", "").replace("datetime.date", "date").replace("datetime.datetime", "datetime")
+            if inner.startswith("<class '") and inner.endswith("'>"):
+                inner = inner.split("'")[1]
+            return f"list[{inner}]"
+
+        # Literal[...] keep as-is
+        if s.startswith("Literal[") and s.endswith("]"):
+            return s
+
+        # NoneType -> None
+        s = s.replace("NoneType", "None")
+        return s
+
+    if not label:
+        return ("str", False)
+
+    s = str(label).strip().replace("typing.", "")
+
+    # --- Optional forms detection ---
+    # Optional[T]
+    if s.startswith("Optional[") and s.endswith("]"):
+        core = s[len("Optional["):-1].strip()
+        return (_base_normalize(core), True)
+
+    # Union[T, None] or Union[None, T]
+    if s.startswith("Union[") and s.endswith("]"):
+        inner = s[len("Union["):-1]
+        parts = [p.strip() for p in inner.split(",")]
+        parts = [p.replace("NoneType", "None") for p in parts]
+        if "None" in parts and len(parts) == 2:
+            core = parts[0] if parts[1] == "None" else parts[1]
+            return (_base_normalize(core), True)
+        # Non-optional unions: normalize but keep as-is
+        return (_base_normalize(f"Union[{inner}]"), False)
+
+    # PEP 604: T | None
+    if " | None" in s:
+        core = s.replace(" | None", "").strip()
+        return (_base_normalize(core), True)
+
+    # Not optional
+    return (_base_normalize(s), False)
