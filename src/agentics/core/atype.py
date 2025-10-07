@@ -1,16 +1,32 @@
-from pydantic import BaseModel, create_model, Field
-from typing import Any, Optional, get_origin,get_args, Dict, Union, List, Set, Tuple, Type
-from agentics.core.utils import sanitize_field_name
-import pandas as pd
 import csv
-
+import json
 import types
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
+
+import pandas as pd
+from pydantic import BaseModel, Field, create_model
+
+from agentics.core.utils import sanitize_field_name
+
 
 class AGString(BaseModel):
-    string:Optional[str] = None
+    string: Optional[str] = None
+
 
 #####################################
 ####### Utils #######################
+
 
 def pretty_print_atype(atype, indent: int = 2):
     """
@@ -44,9 +60,11 @@ def copy_attribute_values(
     return state
 
 
-import pandas as pd
 from typing import Type
+
+import pandas as pd
 from pydantic import BaseModel
+
 
 def get_pydantic_fields(atype: Type[BaseModel]):
     """
@@ -75,14 +93,16 @@ def get_pydantic_fields(atype: Type[BaseModel]):
             default_val = field.default
 
         # Add to list
-        fields_list.append({
-            "name": field_name,
-            "type_label": type_label,
-            "optional": optional,
-            "use_default": has_default,
-            "default_value": default_val,
-            "description": field.description or "",
-        })
+        fields_list.append(
+            {
+                "name": field_name,
+                "type_label": type_label,
+                "optional": optional,
+                "use_default": has_default,
+                "default_value": default_val,
+                "description": field.description or "",
+            }
+        )
 
     return fields_list
 
@@ -241,7 +261,6 @@ def create_pydantic_model(
     return create_model(model_name, **field_definitions)
 
 
-
 def make_all_fields_optional(
     model_cls: type[BaseModel], rename_type: str = None
 ) -> type[BaseModel]:
@@ -292,13 +311,29 @@ def pretty_print_atype(atype, indent: int = 2):
         for arg in args:
             pretty_print_atype(arg, indent + 2)
         print(f"{prefix}]")
-from typing import (
-    Any, Optional, List, Dict, Tuple, Set, Union, Literal,
-    Type, Sequence, Mapping, Annotated
-)
-from pydantic import BaseModel, Field
-from typing import get_origin, get_args
+
+
 import datetime
+from typing import (
+    Annotated,
+    Any,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
+
+from pydantic import BaseModel, Field
+
+
 def import_pydantic_from_string(code: str):
     """
     Dynamically execute Pydantic class code and return the first
@@ -340,7 +375,8 @@ def import_pydantic_from_string(code: str):
 
     # Automatically find the first Pydantic model class
     classes = [
-        obj for obj in module.__dict__.values()
+        obj
+        for obj in module.__dict__.values()
         if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel
     ]
 
@@ -362,6 +398,7 @@ def normalize_type_label(label: str | None) -> tuple[str, bool]:
     - int | None              -> ("int", True)
     - Literal['A','B']        -> ("Literal['A','B']", False)
     """
+
     def _base_normalize(s: str) -> str:
         # <class 'int'> -> int
         if s.startswith("<class '") and s.endswith("'>"):
@@ -374,12 +411,20 @@ def normalize_type_label(label: str | None) -> tuple[str, bool]:
         s = s.replace("datetime.date", "date").replace("datetime.datetime", "datetime")
 
         # List/Dict/Tuple -> lowercase generics
-        s = s.replace("List[", "list[").replace("Dict[", "dict[").replace("Tuple[", "tuple[")
+        s = (
+            s.replace("List[", "list[")
+            .replace("Dict[", "dict[")
+            .replace("Tuple[", "tuple[")
+        )
 
         # Canonicalize list[...] inner
         if s.startswith("list[") and s.endswith("]"):
             inner = s[5:-1].strip()
-            inner = inner.replace("typing.", "").replace("datetime.date", "date").replace("datetime.datetime", "datetime")
+            inner = (
+                inner.replace("typing.", "")
+                .replace("datetime.date", "date")
+                .replace("datetime.datetime", "datetime")
+            )
             if inner.startswith("<class '") and inner.endswith("'>"):
                 inner = inner.split("'")[1]
             return f"list[{inner}]"
@@ -400,12 +445,12 @@ def normalize_type_label(label: str | None) -> tuple[str, bool]:
     # --- Optional forms detection ---
     # Optional[T]
     if s.startswith("Optional[") and s.endswith("]"):
-        core = s[len("Optional["):-1].strip()
+        core = s[len("Optional[") : -1].strip()
         return (_base_normalize(core), True)
 
     # Union[T, None] or Union[None, T]
     if s.startswith("Union[") and s.endswith("]"):
-        inner = s[len("Union["):-1]
+        inner = s[len("Union[") : -1]
         parts = [p.strip() for p in inner.split(",")]
         parts = [p.replace("NoneType", "None") for p in parts]
         if "None" in parts and len(parts) == 2:
@@ -421,3 +466,36 @@ def normalize_type_label(label: str | None) -> tuple[str, bool]:
 
     # Not optional
     return (_base_normalize(s), False)
+
+
+import html
+
+
+def pydantic_to_markdown(obj: BaseModel, title: str | None = None) -> str:
+    """
+    Pretty-print a Pydantic model instance as a Markdown table,
+    safely rendering nested JSON inside HTML <pre><code> blocks
+    (so it works inside tables and Streamlit).
+    """
+    if not isinstance(obj, BaseModel):
+        raise TypeError("Expected a Pydantic BaseModel instance.")
+
+    data = obj.model_dump()
+    lines = []
+
+    if title:
+        lines.append(f"### {title}\n")
+
+    lines.append("| **Field** | **Value** |")
+    lines.append("|------------|------------|")
+
+    for key, value in data.items():
+        if isinstance(value, (dict, list)):
+            # Pretty JSON with safe HTML escaping
+            json_str = json.dumps(value, indent=2, ensure_ascii=False)
+            formatted = f"<pre><code>{html.escape(json_str)}</code></pre>"
+        else:
+            formatted = str(value) if value is not None else "—"
+        lines.append(f"| `{key}` | {formatted} |")
+
+    return "\n".join(lines)

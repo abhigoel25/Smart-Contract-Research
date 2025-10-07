@@ -34,6 +34,8 @@ dependencies = [
     "aiosqlite>=0.21.0",
 ]
 
+
+
 [tool.uv]
 package = true
 
@@ -89,7 +91,7 @@ testpaths = ["tests"]
 addopts = "--html=report.html --self-contained-html"
 
 [tool.codespell]
-ignore-words-list = "ans"
+ignore-words-list = ["ans" , "AGs"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

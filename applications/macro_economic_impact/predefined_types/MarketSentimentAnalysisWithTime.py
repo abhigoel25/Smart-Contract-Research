@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class market_sentiment_analysis(BaseModel):
+class MarketSentimentAnalysisWithTime(BaseModel):
     market_sentiment: str | None = Field(
         default=None,
         description="The general market sentiment for the day, e.g., Positive, Negative, Neutral.",
@@ -25,4 +25,10 @@ class market_sentiment_analysis(BaseModel):
     confidence_level: float | None = Field(
         default=None,
         description="Rate your confidence in the market sentiment assessment on a scale from 0 to 1, where 1 indicates absolute confidence.",
+    )
+    start_date: Any | None = Field(
+        default=None, description="The date of the first day analyzed in the report"
+    )
+    end_date: Any | None = Field(
+        default=None, description="The date of the last day analyzed in the report"
     )

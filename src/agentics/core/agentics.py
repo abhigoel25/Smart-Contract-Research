@@ -26,25 +26,32 @@ from crewai import LLM
 from langchain_core.prompts import PromptTemplate
 from loguru import logger
 from pandas import DataFrame
-from pydantic import BaseModel, Field, create_model, ValidationError
+from pydantic import BaseModel, Field, ValidationError, create_model
 
 from agentics.core.async_executor import (
     PydanticTransducerCrewAI,
     PydanticTransducerVLLM,
     aMap,
 )
-
+from agentics.core.atype import (
+    copy_attribute_values,
+    get_active_fields,
+    make_all_fields_optional,
+    pydantic_model_from_csv,
+    pydantic_model_from_dataframe,
+    pydantic_model_from_dict,
+    pydantic_model_from_jsonl,
+)
 from agentics.core.errors import InvalidStateError
 from agentics.core.llm_connections import available_llms, get_llm_provider
 from agentics.core.mapping import AttributeMapping, ATypeMapping
-from agentics.core.atype import copy_attribute_values, get_active_fields, pydantic_model_from_csv, pydantic_model_from_dataframe, pydantic_model_from_dict, pydantic_model_from_jsonl, make_all_fields_optional
 from agentics.core.utils import (
+    chunk_list,
     clean_for_json,
     is_str_or_list_of_str,
+    make_states_list_model,
     remap_dict_keys,
     sanitize_dict_keys,
-    make_states_list_model,
-    chunk_list
 )
 
 AG = TypeVar("AG", bound="AG")
@@ -105,9 +112,11 @@ class AG(BaseModel, Generic[T]):
     transduction_timeout: float | None = None
     verbose_transduction: bool = True
     verbose_agent: bool = False
-    areduce_batch_size: int = Field(10,
-        description="The size of the bathes to be used when transduction type is areduce")
-    areduce_batches:List[BaseModel] = []
+    areduce_batch_size: int = Field(
+        10,
+        description="The size of the bathes to be used when transduction type is areduce",
+    )
+    areduce_batches: List[BaseModel] = []
 
     crew_prompt_params: Optional[Dict[str, str]] = Field(
         {
@@ -135,7 +144,6 @@ class AG(BaseModel, Generic[T]):
     def timeout(self, value: float):
         self.transduction_timeout = value
 
-
     ###################################
     #### Agentics Utilities   #########
     ###################################
@@ -145,11 +153,11 @@ class AG(BaseModel, Generic[T]):
         copy_instance.tools = agentics_instance.tools  # shallow copy, ok if immutable
         return copy_instance
 
-    def filter_states(self, start: int=None, end: int=None) -> AG:
-        new_self=self.clone()
+    def filter_states(self, start: int = None, end: int = None) -> AG:
+        new_self = self.clone()
         new_self.states = self.states[start:end]
         return new_self
-    
+
     def get_random_sample(self, percent: float) -> AG:
         if not (0 <= percent <= 1):
             raise ValueError("Percent must be between 0 and 1")
@@ -158,9 +166,6 @@ class AG(BaseModel, Generic[T]):
         output = self.clone()
         output.states = random.sample(self.states, sample_size)
         return output
-
-    
-
 
     ##############
     ### LLMs  ####
@@ -185,7 +190,7 @@ class AG(BaseModel, Generic[T]):
         if provider_name in available_llms:
             return available_llms[provider_name]
         raise ValueError(f"Unknown provider: {provider_name}")
-    
+
     ##############################
     #### List Functionalities ####
     ##############################
@@ -198,16 +203,13 @@ class AG(BaseModel, Generic[T]):
         """Returns the number of states"""
         return len(self.states)
 
-
     def __getitem__(self, index: int):
         """Returns the state for the provided index"""
         return self.states[index]
-    
+
     def append(self, state: BaseModel):
         """Append the state into the list of states"""
         self.states.append(state)
-
-
 
     ########################################
     #### aMapReduce Functionalities ########
@@ -245,7 +247,7 @@ class AG(BaseModel, Generic[T]):
 
         self.states = _states
         return self
-    
+
     async def apply(self, func: StateOperator, first_n: Optional[int] = None) -> AG:
         """
         Applies a function to each state in the Agentics object.
@@ -264,13 +266,10 @@ class AG(BaseModel, Generic[T]):
             ] + self.states[first_n:]
         return self
 
-    
-
     async def areduce(self, func: StateReducer) -> AG:
         output = await func(self.states)
         self.states = [output] if isinstance(output, BaseModel) else output
         return self
-
 
     ###############################
     #### Import Functionalities ###
@@ -400,11 +399,15 @@ class AG(BaseModel, Generic[T]):
     def pretty_print(self):
         output = f"Atype : {self.atype}\n"
         for state in self.states:
-            output += yaml.dump(state.model_dump() if isinstance(state,BaseModel) else str(state), 
-                                sort_keys=False) + "\n"
+            output += (
+                yaml.dump(
+                    state.model_dump() if isinstance(state, BaseModel) else str(state),
+                    sort_keys=False,
+                )
+                + "\n"
+            )
         print(output)
         return output
-
 
     def to_csv(self, csv_file: str) -> Any:
         if self.verbose_transduction:
@@ -439,8 +442,6 @@ class AG(BaseModel, Generic[T]):
         data = [state.model_dump() for state in self.states]
         return pd.DataFrame(data)
 
-
-
     ##########################################
     ##### Logical Transduction ###############
     ##########################################
@@ -451,45 +452,43 @@ class AG(BaseModel, Generic[T]):
         Return None if the right operand is not of type AgenticList
         """
         from agentics.core.atype import AGString
+
         async def llm_call(input: AGString) -> AGString:
-            input.string= self.llm.call(input.string)
+            input.string = self.llm.call(input.string)
             return input
-        
 
-      
-
-        if not self.atype and isinstance(other,str):
+        if not self.atype and isinstance(other, str):
             return self.llm.call(other)
-        
-        
+
         if not self.atype and is_str_or_list_of_str(other):
-            if self.transduction_type=="amap":
-                input_messages=AG(states=[AGString(string=x) for x in other])
+            if self.transduction_type == "amap":
+                input_messages = AG(states=[AGString(string=x) for x in other])
                 input_messages = await input_messages.amap(llm_call)
                 return [x.string for x in input_messages.states]
-        
-        if  self.transduction_type =="areduce":
+
+        if self.transduction_type == "areduce":
             if is_str_or_list_of_str(other):
-                chunks= chunk_list(other, chunk_size=self.areduce_batch_size)
-            else:  chunks= chunk_list(other.states, chunk_size=self.areduce_batch_size)
-            if len(chunks)==1:
-                self.transduction_type="amap"
-                self =  await (self << str(chunks[0]))
-                self.transduction_type="areduce"
+                chunks = chunk_list(other, chunk_size=self.areduce_batch_size)
+            else:
+                chunks = chunk_list(other.states, chunk_size=self.areduce_batch_size)
+            if len(chunks) == 1:
+                self.transduction_type = "amap"
+                self = await (self << str(chunks[0]))
+                self.transduction_type = "areduce"
                 return self
             else:
-                self.transduction_type="amap"
+                self.transduction_type = "amap"
                 reduced_chunks = await (self << [str(x) for x in chunks])
-                self.transduction_type="areduce"
+                self.transduction_type = "areduce"
                 self.areduce_batches += reduced_chunks.states
                 return await (self << reduced_chunks)
-
-
 
         output = self.clone()
         output.states = []
 
-        input_prompts = []  # gather input prompts for transduction by dumping input states
+        input_prompts = (
+            []
+        )  # gather input prompts for transduction by dumping input states
         target_type = (
             self.subset_atype(self.transduce_fields)
             if self.transduce_fields
@@ -521,7 +520,7 @@ class AG(BaseModel, Generic[T]):
             if isinstance(other, str):
                 other = [other]
             input_prompts = ["\nSOURCE:\n" + x for x in other]
-        elif isinstance(other,list):
+        elif isinstance(other, list):
             try:
                 input_prompts = ["\nSOURCE:\n" + str(x) for x in other]
             except:
@@ -626,10 +625,14 @@ class AG(BaseModel, Generic[T]):
                     output_state_dict = output_state.model_dump()
 
                 merged = self.atype(
-                    **((self[i].model_dump() if len(self)>i else {} )| other[i].model_dump() | output_state_dict )
+                    **(
+                        (self[i].model_dump() if len(self) > i else {})
+                        | other[i].model_dump()
+                        | output_state_dict
+                    )
                 )
                 output.states.append(merged)
-        #elif is_str_or_list_of_str(other):
+        # elif is_str_or_list_of_str(other):
         elif isinstance(other, list):
             for i in range(len(other)):
                 if isinstance(output_states[i], self.atype):
@@ -670,7 +673,6 @@ class AG(BaseModel, Generic[T]):
         output_process = target << self
         output = await output_process
         return output
-
 
     #####################################
     ### Atype Manipulation Functions ####
@@ -747,9 +749,6 @@ class AG(BaseModel, Generic[T]):
             extended_ags.append(extended_ag)
 
         return reduce((lambda x, y: AG.add_states(x, y)), extended_ags)
-    
- 
-    
 
     def merge(self, other: "AG") -> "AG":
         """
@@ -767,20 +766,27 @@ class AG(BaseModel, Generic[T]):
 
         # left first...
         for name, f in self.atype.model_fields.items():
-            new_fields[name] = (f.annotation, Field(default=f.default, description=f.description))
+            new_fields[name] = (
+                f.annotation,
+                Field(default=f.default, description=f.description),
+            )
 
         # ...then overlay right (right wins)
         for name, f in other.atype.model_fields.items():
-            new_fields[name] = (f.annotation, Field(default=f.default, description=f.description))
+            new_fields[name] = (
+                f.annotation,
+                Field(default=f.default, description=f.description),
+            )
 
         merged_atype = create_model(
-            f"{self.atype.__name__}__merge__{other.atype.__name__}",
-            **new_fields
+            f"{self.atype.__name__}__merge__{other.atype.__name__}", **new_fields
         )
 
         # 2) Pairwise merge states (right wins on value conflicts)
         merged_states = []
-        for left_state, right_state in zip_longest(self.states, other.states, fillvalue=None):
+        for left_state, right_state in zip_longest(
+            self.states, other.states, fillvalue=None
+        ):
             left = left_state.model_dump() if left_state is not None else {}
             right = right_state.model_dump() if right_state is not None else {}
             data = left | right  # right overwrites left for same keys
@@ -797,7 +803,9 @@ class AG(BaseModel, Generic[T]):
         Usage: After evaluating the prompts we want separate the evaluated sets and reduce score from each
         """
         quotient_list = []
-        quotient_size, quotient_counts = len(self.states), len(other.states) // len(self.states)
+        quotient_size, quotient_counts = len(self.states), len(other.states) // len(
+            self.states
+        )
         for ind in range(quotient_counts):
             quotient_ag = self.clone()
             quotient_ag.states = [
@@ -808,7 +816,7 @@ class AG(BaseModel, Generic[T]):
             ]
             quotient_list.append(quotient_ag)
         return quotient_list
-    
+
     async def map_atypes(self, other: AG) -> ATypeMapping:
         if self.verbose_agent:
             logger.debug(f"Mapping type {other.atype} into type {self.atype}")
@@ -846,7 +854,7 @@ class AG(BaseModel, Generic[T]):
             << [f"SOURCE:\n{str(source_schema_dict)}\nTARGET:{str(target_schema_dict)}"]
         )
         return output.attribute_mappings
-    
+
     def subset_atype(self, include_fields: set[str]) -> Type[BaseModel]:
         """Generate a type which is a subset of a_type containing only fields in include list"""
         fields = {
@@ -859,9 +867,8 @@ class AG(BaseModel, Generic[T]):
         return create_model("_".join(include_fields), **fields)
 
     def rebind_atype(
-        self,
-        new_atype: Type[BaseModel],
-        mapping: Dict[str, str] | None = None):
+        self, new_atype: Type[BaseModel], mapping: Dict[str, str] | None = None
+    ):
         """
         Return a new AG whose `atype` is rebound to `new_atype`.
 
@@ -896,7 +903,7 @@ class AG(BaseModel, Generic[T]):
                 logger.warning("Failed to rebind state %s: %s", state, e)
 
         return new_ag
-    
+
     def add_attribute(
         self,
         slot_name: str,

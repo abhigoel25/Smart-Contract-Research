@@ -6,10 +6,13 @@ from collections.abc import Iterable
 from typing import (
     Any,
     Awaitable,
+    Dict,
     List,
     Optional,
+    Type,
+    TypeVar,
+    Union,
     get_origin,
-    Dict, Union
 )
 
 import httpx
@@ -31,9 +34,6 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
-
-from typing import List, Type, TypeVar
-from pydantic import BaseModel, Field, create_model
 
 A = TypeVar("A", bound=BaseModel)
 
@@ -60,30 +60,29 @@ def scan_directory_recursively(path: str) -> List[str]:
 
 
 def infer_pydantic_type(dtype: Any, sample_values: pd.Series = None) -> Any:
-        if pd.api.types.is_integer_dtype(dtype):
-            return Optional[int]
-        elif pd.api.types.is_float_dtype(dtype):
-            return Optional[float]
-        elif pd.api.types.is_bool_dtype(dtype):
-            return Optional[bool]
-        elif pd.api.types.is_datetime64_any_dtype(dtype):
-            return Optional[str]  # Or datetime.datetime
-        elif sample_values is not None:
-            # Check if the column contains lists of strings
-            for val in sample_values:
-                if isinstance(val, list) and all(isinstance(x, str) for x in val):
-                    return Optional[List[str]]
-                elif isinstance(val, dict):
-                    if all(isinstance(k, str) for k in val.keys()):
-                        if all(
-                            isinstance(v, (str, list))
-                            and (isinstance(v, str) or all(isinstance(i, str) for i in v))
-                            for v in val.values()
-                        ):
-                            return Optional[Dict[str, Union[str, List[str]]]]
-                break  # Only check the first non-null value
-        return Optional[str]
-
+    if pd.api.types.is_integer_dtype(dtype):
+        return Optional[int]
+    elif pd.api.types.is_float_dtype(dtype):
+        return Optional[float]
+    elif pd.api.types.is_bool_dtype(dtype):
+        return Optional[bool]
+    elif pd.api.types.is_datetime64_any_dtype(dtype):
+        return Optional[str]  # Or datetime.datetime
+    elif sample_values is not None:
+        # Check if the column contains lists of strings
+        for val in sample_values:
+            if isinstance(val, list) and all(isinstance(x, str) for x in val):
+                return Optional[List[str]]
+            elif isinstance(val, dict):
+                if all(isinstance(k, str) for k in val.keys()):
+                    if all(
+                        isinstance(v, (str, list))
+                        and (isinstance(v, str) or all(isinstance(i, str) for i in v))
+                        for v in val.values()
+                    ):
+                        return Optional[Dict[str, Union[str, List[str]]]]
+            break  # Only check the first non-null value
+    return Optional[str]
 
 
 def sanitize_field_name(name: str) -> str:
@@ -118,7 +117,6 @@ def chunk_list(lst, chunk_size):
         list of lists: A list where each element is a sublist of length `chunk_size`, except possibly the last one.
     """
     return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
-
 
 
 def clean_for_json(obj: Any) -> Any:
@@ -301,6 +299,5 @@ def make_states_list_model(item_type: Type[A]) -> Type[BaseModel]:
     """
     # Name is optional; Pydantic will auto-unique if reused.
     return create_model(
-        "ATypeList",
-        states=(List[item_type], Field(default_factory=list))
+        "ATypeList", states=(List[item_type], Field(default_factory=list))
     )

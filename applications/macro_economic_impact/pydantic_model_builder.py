@@ -2,21 +2,30 @@
 from __future__ import annotations
 
 import json
-from typing import Any, get_args, get_origin
 import os
 from pathlib import Path
+from typing import Any, get_args, get_origin
+
 import streamlit as st
-from pydantic import BaseModel, Field, ValidationError, create_model
-from src.agentics.core.atype import import_pydantic_from_string , get_pydantic_fields, normalize_type_label
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError, create_model
+
+from src.agentics.core.atype import (
+    get_pydantic_fields,
+    import_pydantic_from_string,
+    normalize_type_label,
+)
+
 load_dotenv()
 # -----------------------
 # Helpers
 # -----------------------
 
-        
-        # --- helpers (place once) ----------------------------------------------------
-def ensure_label_in_options(curr_label: str, base_options: list[str]) -> tuple[list[str], int]:
+
+# --- helpers (place once) ----------------------------------------------------
+def ensure_label_in_options(
+    curr_label: str, base_options: list[str]
+) -> tuple[list[str], int]:
     """Guarantee curr_label is selectable; return (options, index)."""
     options = list(base_options)  # copy
     if curr_label not in options:
@@ -26,6 +35,8 @@ def ensure_label_in_options(curr_label: str, base_options: list[str]) -> tuple[l
     except ValueError:
         idx = 0
     return options, idx
+
+
 # -----------------------------------------------------------------------------
 
 SIMPLE_TYPES = {
@@ -45,15 +56,19 @@ LIST_TYPES = {
     "list[bool]": list[bool],
 }
 
+
 # Lazy imports (date/datetime are optional until needed)
 def _resolve_builtin(name: str):
     if name == "date":
         import datetime
+
         return datetime.date
     if name == "datetime":
         import datetime
+
         return datetime.datetime
     raise KeyError(name)
+
 
 def parse_field_type(label: str):
     """Map UI label -> Python type."""
@@ -65,13 +80,16 @@ def parse_field_type(label: str):
     if label.startswith("Literal["):
         # e.g. "Literal['A','B','C']"
         from typing import Literal
+
         # Very small safe parser: expect a python-ish list of comma-separated items
-        items_str = label[len("Literal["):-1]
+        items_str = label[len("Literal[") : -1]
         parts = [p.strip() for p in items_str.split(",") if p.strip()]
         # Allow quotes or bare numbers/bools
         parsed = []
         for p in parts:
-            if (p.startswith("'") and p.endswith("'")) or (p.startswith('"') and p.endswith('"')):
+            if (p.startswith("'") and p.endswith("'")) or (
+                p.startswith('"') and p.endswith('"')
+            ):
                 parsed.append(p[1:-1])
             else:
                 # try number/bool
@@ -88,6 +106,7 @@ def parse_field_type(label: str):
         return Literal[tuple(parsed)]  # type: ignore
     return Any
 
+
 def type_to_str(t: Any) -> str:
     """Pretty-print a Python type into a class annotation string."""
     origin = get_origin(t)
@@ -102,6 +121,7 @@ def type_to_str(t: Any) -> str:
     if hasattr(t, "__name__"):
         return t.__name__
     return repr(t)
+
 
 def make_class_code(fields_spec: list[dict], model_name: str = None) -> str:
     """Generate a Pydantic class definition string from the UI spec."""
@@ -156,13 +176,16 @@ def make_class_code(fields_spec: list[dict], model_name: str = None) -> str:
         else:
             # No explicit default
             if optional:
-                rhs = f"Field(default=None, description={repr(desc)})" if desc else "None"
+                rhs = (
+                    f"Field(default=None, description={repr(desc)})" if desc else "None"
+                )
             else:
                 rhs = f"Field(..., description={repr(desc)})" if desc else "Field(...)"
 
         lines.append(f"    {fname}: {ann} = {rhs}")
 
     return "\n".join(lines)
+
 
 def build_model(model_name: str, fields_spec: list[dict]):
     """Create a Pydantic model dynamically from the UI spec."""
@@ -201,58 +224,90 @@ def build_model(model_name: str, fields_spec: list[dict]):
 def pydantic_model_bulilder_ui():
     """Run the Streamlit app."""
 
-    type_options = list(SIMPLE_TYPES.keys()) + list(LIST_TYPES.keys()) + ["Literal['A','B','C']"]
+    type_options = (
+        list(SIMPLE_TYPES.keys()) + list(LIST_TYPES.keys()) + ["Literal['A','B','C']"]
+    )
 
     if "fields" not in st.session_state:
-            st.session_state.fields = []
+        st.session_state.fields = []
     if "pydantic_class" not in st.session_state:
         st.session_state.pydantic_class = None
 
-    st.set_page_config(page_title="Pydantic Model Builder", page_icon="🧱", layout="wide")
+    st.set_page_config(
+        page_title="Pydantic Model Builder", page_icon="🧱", layout="wide"
+    )
 
     # st.session_state.model_name = (st.session_state.new_model_name if st.session_state.new_model_name!="NA" else None) \
     #             or (st.session_state.selected_model.split(".")[0] if st.session_state.selected_model!="NA" else "GeneratedModel")
 
-    
-    st.markdown("### 🧱 Visual Pydantic Model Builder""")
-    col1, col2 = st.columns([0.5,0.5], gap="large")
+    st.markdown("### 🧱 Visual Pydantic Model Builder" "")
+    col1, col2 = st.columns([0.5, 0.5], gap="large")
     with col1:
-        st.markdown("#### Select exsiting model")
-        options = [f.split(".")[0] for f in os.listdir(Path(__file__).resolve().parent / "predefined_types")     if f.endswith(".py") and not f.startswith("__")]
-        st.session_state.selected_model = st.selectbox("Predefined Models", options=options)
+        st.markdown("#### Select existing model")
+        options = [
+            f.split(".")[0]
+            for f in os.listdir(Path(__file__).resolve().parent / "predefined_types")
+            if f.endswith(".py") and not f.startswith("__")
+        ]
+        st.session_state.selected_model = st.selectbox(
+            "Predefined Models", options=options
+        )
+
         load_model = st.button("Load Selected Model")
         delete_model = st.button("Delete Selected Model")
-        if load_model and st.session_state.selected_model!="NA":
-            with open(Path(__file__).resolve().parent / "predefined_types" / (st.session_state.selected_model + ".py"), "r") as f:
+        new_model = st.button("Create New Model")
+        if new_model:
+            st.session_state.selected_model = "NA"
+            st.session_state.new_model_name = "NA"
+            st.session_state.pydantic_class = None
+            st.session_state.fields = []
+            st.rerun()
+
+        if load_model and st.session_state.selected_model != "NA":
+            with open(
+                Path(__file__).resolve().parent
+                / "predefined_types"
+                / (st.session_state.selected_model + ".py"),
+                "r",
+            ) as f:
                 st.session_state.code = f.read()
                 st.session_state.new_model_name = st.session_state.selected_model
-                st.session_state.pydantic_class = import_pydantic_from_string(st.session_state.code)
-                st.session_state.fields = get_pydantic_fields(st.session_state.pydantic_class)
+                st.session_state.pydantic_class = import_pydantic_from_string(
+                    st.session_state.code
+                )
+                st.session_state.fields = get_pydantic_fields(
+                    st.session_state.pydantic_class
+                )
                 st.rerun()
-        if delete_model and st.session_state.selected_model!="NA":
-            os.remove(Path(__file__).resolve().parent / "predefined_types" / st.session_state.selected_model)
+        if delete_model and st.session_state.selected_model != "NA":
+            os.remove(
+                Path(__file__).resolve().parent
+                / "predefined_types"
+                / (st.session_state.selected_model + ".py")
+            )
             st.session_state.selected_model = "NA"
             st.session_state.new_model_name = "NA"
             st.session_state.pydantic_class = None
             st.session_state.fields = []
             st.success("Deleted model.")
-            st.rerun()  
-
+            st.rerun()
 
         st.markdown("#### Edit Type Fields")
-       
-       
-        
+
         if len(st.session_state.fields) > 0:
             st.markdown("### Fields")
             to_delete = []
 
             for i, fs in enumerate(st.session_state.fields):
-                with st.expander(f"Field #{i+1}: `{fs.get('name','')}`", expanded=False):
+                with st.expander(
+                    f"Field #{i+1}: `{fs.get('name','')}`", expanded=False
+                ):
                     c1, c2, c4 = st.columns([0.4, 0.4, 0.2])
 
                     # Name
-                    fs["name"] = c1.text_input("Name", value=fs.get("name", ""), key=f"name_{i}")
+                    fs["name"] = c1.text_input(
+                        "Name", value=fs.get("name", ""), key=f"name_{i}"
+                    )
 
                     # Normalize incoming type; detect optional from the label itself
                     raw_label = fs.get("type_label", "str")
@@ -301,17 +356,27 @@ def pydantic_model_bulilder_ui():
                 st.rerun()
         else:
             st.info("Add fields from the sidebar to begin.")
-        
-
 
         with st.popover("Add field"):
 
-            new_name = st.text_input("Field name", key="new_field_name", placeholder="e.g., title")
-            new_type = st.selectbox("Field type", options=type_options, key="new_field_type", index=0)
-            #new_optional = st.checkbox("Optional", key="new_field_optional", value=False)
-            new_use_default = st.checkbox("Set default value", key="new_use_default", value=False)
-            new_default_value = st.text_input("Default (as text)", key="new_default_value", disabled=not new_use_default)
-            new_description = st.text_area("Description (optional)", key="new_desc", height=80)
+            new_name = st.text_input(
+                "Field name", key="new_field_name", placeholder="e.g., title"
+            )
+            new_type = st.selectbox(
+                "Field type", options=type_options, key="new_field_type", index=0
+            )
+            # new_optional = st.checkbox("Optional", key="new_field_optional", value=False)
+            new_use_default = st.checkbox(
+                "Set default value", key="new_use_default", value=False
+            )
+            new_default_value = st.text_input(
+                "Default (as text)",
+                key="new_default_value",
+                disabled=not new_use_default,
+            )
+            new_description = st.text_area(
+                "Description (optional)", key="new_desc", height=80
+            )
 
             if st.button("➕ Add field"):
                 if not new_name.strip():
@@ -329,31 +394,34 @@ def pydantic_model_bulilder_ui():
                     )
                     st.success(f"Added field `{new_name.strip()}`")
                     st.rerun()
+        st.session_state.new_model_name = st.text_input("New Model Name")
         save_model = st.button("Save Model")
         if save_model and st.session_state.fields:
-            if st.session_state.selected_model=="NA":
-                st.warning("Please select a predefined model to overwrite, or create a new one.")
+            if st.session_state.selected_model == "NA":
+                st.warning(
+                    "Please select a predefined model to overwrite, or create a new one."
+                )
             else:
-                output_path = Path("/Users/gliozzo/Code/agentics911/agentics/applications/macro_economic_impact/predefined_types")  / (st.session_state.new_model_name + ".py")
+                output_path = Path(
+                    "/Users/gliozzo/Code/agentics911/agentics/applications/macro_economic_impact/predefined_types"
+                ) / (st.session_state.new_model_name + ".py")
                 with open(output_path, "w") as f:
-                    f.write(make_class_code(st.session_state.fields, model_name=st.session_state.new_model_name))
-                st.success(f"Saved model to predefined_types/{output_path.name}")  
-        st.session_state.new_model_name = st.text_input("New Model Name")
-        new_model = st.button("Create New Model")
-        if new_model:
-            st.session_state.selected_model = "NA"
-            st.session_state.new_model_name = "NA"
-            st.session_state.pydantic_class = None
-            st.session_state.fields = []
-            st.rerun()
+                    f.write(
+                        make_class_code(
+                            st.session_state.fields,
+                            model_name=st.session_state.new_model_name,
+                        )
+                    )
+                st.success(f"Saved model to predefined_types/{output_path.name}")
 
     with col2:
-    
 
-        tabs = st.tabs(["🧾 Generated Class Code", "▶️ Preview & Validate", "🧩 JSON Schema"])
-        
+        tabs = st.tabs(
+            ["🧾 Generated Class Code", "▶️ Preview & Validate", "🧩 JSON Schema"]
+        )
+
         if st.session_state.fields:
-            
+
             with tabs[0]:
 
                 st.code(st.session_state.code, language="python")
@@ -371,7 +439,9 @@ def pydantic_model_bulilder_ui():
                     st.markdown("**Enter sample JSON to validate**")
                     sample = st.text_area(
                         "JSON input",
-                        value=json.dumps({f["name"]: None for f in st.session_state.fields}, indent=2),
+                        value=json.dumps(
+                            {f["name"]: None for f in st.session_state.fields}, indent=2
+                        ),
                         height=220,
                     )
                     if st.button("Validate JSON"):
@@ -404,13 +474,23 @@ def pydantic_model_bulilder_ui():
                                 casted[name] = None
                             else:
                                 if t is int:
-                                    try: casted[name] = int(val)
-                                    except: casted[name] = val
+                                    try:
+                                        casted[name] = int(val)
+                                    except:
+                                        casted[name] = val
                                 elif t is float:
-                                    try: casted[name] = float(val)
-                                    except: casted[name] = val
+                                    try:
+                                        casted[name] = float(val)
+                                    except:
+                                        casted[name] = val
                                 elif t is bool:
-                                    casted[name] = str(val).strip().lower() in ("1","true","yes","y","on")
+                                    casted[name] = str(val).strip().lower() in (
+                                        "1",
+                                        "true",
+                                        "yes",
+                                        "y",
+                                        "on",
+                                    )
                                 else:
                                     casted[name] = val
                         try:
@@ -420,7 +500,9 @@ def pydantic_model_bulilder_ui():
                         except ValidationError as e:
                             st.error(str(e))
 
-
             with tabs[2]:
-                st.session_state.pydantic_class = build_model(st.session_state.selected_model.split(".")[0], st.session_state.fields)
+                st.session_state.pydantic_class = build_model(
+                    st.session_state.selected_model.split(".")[0],
+                    st.session_state.fields,
+                )
                 st.json(st.session_state.pydantic_class.model_json_schema())
