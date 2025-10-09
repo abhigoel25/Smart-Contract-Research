@@ -10,7 +10,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, ValidationError, create_model
 
-from src.agentics.core.atype import (
+from agentics.core.atype import (
     get_pydantic_fields,
     import_pydantic_from_string,
     normalize_type_label,
@@ -256,6 +256,7 @@ def pydantic_model_bulilder_ui():
         load_model = st.button("Load Selected Model")
         delete_model = st.button("Delete Selected Model")
         new_model = st.button("Create New Model")
+
         if new_model:
             st.session_state.selected_model = "NA"
             st.session_state.new_model_name = "NA"

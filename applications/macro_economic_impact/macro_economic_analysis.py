@@ -56,7 +56,7 @@ def macro_economic_analysis_ui():
             market_sentiment_analysis = st.form_submit_button("Perform Analysis")
 
     if market_sentiment_analysis:
-        print(st.session_state.pydantic_class)
+        # print (st.session_state.pydantic_class)
 
         with st.spinner(f"Performing {st.session_state.selected_model} ..."):
             start_index = st.session_state.market_dataset_index[str(selected_start)]

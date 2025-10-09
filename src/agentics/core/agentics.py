@@ -18,6 +18,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    get_type_hints,
 )
 
 import pandas as pd
@@ -42,7 +43,7 @@ from agentics.core.atype import (
     pydantic_model_from_dict,
     pydantic_model_from_jsonl,
 )
-from agentics.core.errors import InvalidStateError
+from agentics.core.errors import AmapError, InvalidStateError
 from agentics.core.llm_connections import available_llms, get_llm_provider
 from agentics.core.mapping import AttributeMapping, ATypeMapping
 from agentics.core.utils import (
@@ -212,6 +213,80 @@ class AG(BaseModel, Generic[T]):
         self.states.append(state)
 
     ########################################
+    ###### Validation Functionalities ######
+    ########################################
+
+    def validate(
+        self, coerce: bool = False, return_error=False
+    ) -> Union[bool, tuple[bool, list[str]]]:
+        """
+        Validate that all states in an Agentics object match its declared type.
+
+        Args:
+            ag: An Agentics AG instance with attributes:
+                - atype: a Pydantic model class
+                - states: a list of instances or dicts representing states
+            coerce: If True, converts dicts or mismatched BaseModels into ag.atype instances.
+
+        Returns:
+            (ok, problems)
+            ok: True if all states are valid (after optional coercion)
+            problems: list of string messages describing validation errors
+        """
+        problems: list[str] = []
+
+        # --- Structural sanity check ---
+        if not hasattr(self, "atype") or not hasattr(self, "states"):
+            raise TypeError(
+                "Expected an Agentics object with `.atype` and `.states` attributes"
+            )
+
+        atype = self.atype
+        if not isinstance(atype, type) or not issubclass(atype, BaseModel):
+            raise TypeError("ag.atype must be a subclass of pydantic.BaseModel")
+
+        # --- Validation loop ---
+        for i, state in enumerate(self.states):
+            try:
+                # Case 1: already correct Pydantic model
+                if isinstance(state, atype):
+                    continue
+
+                # Case 2: Coercion requested
+                if coerce:
+                    if isinstance(state, dict):
+                        self.states[i] = atype.model_validate(state)
+                    elif isinstance(state, BaseModel):
+                        self.states[i] = atype.model_validate(state.model_dump())
+                    else:
+                        raise TypeError(
+                            f"Unsupported state type: {type(state).__name__}"
+                        )
+                else:
+                    # Validate only (without changing list)
+                    if isinstance(state, dict):
+                        atype.model_validate(state)
+                    elif isinstance(state, BaseModel):
+                        atype.model_validate(state.model_dump())
+                    else:
+                        raise TypeError(
+                            f"Unsupported state type: {type(state).__name__}"
+                        )
+
+            except (ValidationError, TypeError) as e:
+                problems.append(f"State {i}: invalid type or data — {e}")
+        if return_error:
+            if len(problems) == 0:
+                return True, []
+            else:
+                return False, problems
+        else:
+            if len(problems) == 0:
+                return True
+            else:
+                return False
+
+    ########################################
     #### aMapReduce Functionalities ########
     ########################################
 
@@ -219,6 +294,13 @@ class AG(BaseModel, Generic[T]):
         """Asynchronous map with exception-safe job gathering"""
 
         mapper = aMap(func=func, timeout=timeout)
+        hints = get_type_hints(func)
+        if "state" in hints and not issubclass(hints["state"], self.atype):
+            raise AmapError(
+                f"The input type {hints["state"]} of the provided function is not a subclass of the required atype {self.atype}"
+            )
+        if "return" in hints and issubclass(hints["return"], BaseModel):
+            self.atype = hints["return"]
         try:
             results = await mapper.execute(
                 *self.states, description=f"Executing amap on {func.__name__}"
