@@ -80,6 +80,10 @@ class AG(BaseModel, Generic[T]):
         None,
         description="""this is the type in common among all element of the list""",
     )
+    atype_code: Type[BaseModel] = Field(
+        None,
+        description="""Python code for the used type""",
+    )
     states: List[BaseModel] = []
     tools: Optional[List[Any]] = Field(None, exclude=True)
     transduce_fields: Optional[List[str]] = Field(
@@ -179,9 +183,8 @@ class AG(BaseModel, Generic[T]):
     def create_crewai_llm(**kwargs):
         return LLM(**kwargs)
 
-    @classmethod
     async def generate_atype(
-        cls, description: str
+        self, description: str, retry: int = 3
     ) -> Tuple[str, Type[BaseModel]] | None:
 
         class GeneratedAtype(BaseModel):
@@ -190,25 +193,32 @@ class AG(BaseModel, Generic[T]):
             )
             methods: list[str] = Field(None, description="Methods for the class above")
 
-        generated_atype_ag = await (
-            AG(
-                atype=GeneratedAtype,
-                instructions="""Generate python code for the input nl type specs. 
-            Make all fields Optional. Use only primitive types for the fields, avoiding nested. 
-            Provide descriptions for the class and all its fields, using Field(None,description= "...")
-            If the input nl type spec is a question, generate a pydantic type that can be used to 
-            represent the answer to that question.
-            """,
+        i = 0
+        while i < retry:
+
+            generated_atype_ag = await (
+                AG(
+                    atype=GeneratedAtype,
+                    instructions="""Generate python code for the input nl type specs. 
+                Make all fields Optional. Use only primitive types for the fields, avoiding nested. 
+                Provide descriptions for the class and all its fields, using Field(None,description= "...")
+                If the input nl type spec is a question, generate a pydantic type that can be used to 
+                represent the answer to that question.
+                """,
+                )
+                << description
             )
-            << description
-        )
-        if len(generated_atype_ag.states) > 0 and generated_atype_ag[0].python_code:
-
-            gen_type = import_pydantic_from_code(generated_atype_ag[0].python_code)
-            return generated_atype_ag[0].python_code, gen_type
-
-        else:
-            return None
+            if len(generated_atype_ag.states) > 0 and generated_atype_ag[0].python_code:
+                gen_type = import_pydantic_from_code(generated_atype_ag[0].python_code)
+                if gen_type:
+                    self.atype = gen_type
+                    self.atype_code = generated_atype_ag[0].python_code
+                    return self
+                else:
+                    i += 1
+            else:
+                i += 1
+        return self
 
     @classmethod
     def get_llm_provider(

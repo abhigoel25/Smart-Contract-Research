@@ -9,7 +9,6 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from agentics import AG
-from agentics.core.atype import pydantic_to_markdown
 
 
 class Answer(BaseModel):
@@ -81,10 +80,14 @@ def data_processing():
 
     if market_sentiment_analysis:
         # print (st.session_state.pydantic_class)
+
         if question:
-            st.session_state.code, st.session_state.pydantic_class = asyncio.run(
-                AG.generate_atype(question)
+            intermediate_answer_ag = AG()
+            intermediate_answer_ag = asyncio.run(
+                intermediate_answer_ag.generate_atype(question)
             )
+            st.session_state.pydantic_class = intermediate_answer_ag.atype
+            st.session_state.code = intermediate_answer_ag.atype_code
 
         with st.spinner(f"Performing {st.session_state.selected_model} ..."):
             start_index = selected_start

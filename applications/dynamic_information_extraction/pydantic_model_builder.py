@@ -441,9 +441,12 @@ def pydantic_model_bulilder_ui():
             st.session_state.pydantic_class = None
             i = 0
             while not st.session_state.pydantic_class and i < 5:
-                st.session_state.code, st.session_state.pydantic_class = asyncio.run(
-                    AG.generate_atype(st.session_state.type_description)
+                generated_type = AG()
+                generated_type = asyncio.run(
+                    generated_type.generate_atype(st.session_state.type_description)
                 )
+                st.session_state.code = generated_type.atype_code
+                st.session_state.pydantic_class = generated_type.atype
                 if not st.session_state.pydantic_class:
                     i += 1
                     col2.write(
