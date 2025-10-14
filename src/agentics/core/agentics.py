@@ -113,6 +113,7 @@ class AG(BaseModel, Generic[T]):
         False,
         description="if True, don't compose intentional instruction for Crew Task",
     )
+    transient_pbar: bool = False
     transduction_logs_path: Optional[str] = Field(
         None,
         description="""If not null, the specified file will be created and used to save the intermediate results of transduction from each batch. The file will be updated in real time and can be used for monitoring""",
@@ -140,6 +141,11 @@ class AG(BaseModel, Generic[T]):
         model_config = {"arbitrary_types_allowed": True}
 
     @property
+    def __name__(self) -> str:
+        """Returns the name of the atype"""
+        return self.atype.__name__
+
+    @property
     def fields(self) -> List[str]:
         """Returns the list of atype model fields"""
         return list(self.atype.model_fields)
@@ -152,9 +158,9 @@ class AG(BaseModel, Generic[T]):
     def timeout(self, value: float):
         self.transduction_timeout = value
 
-    ###################################
-    #### Agentics Utilities   #########
-    ###################################
+    ################################
+    ##### Agentics Utilities   #####
+    ################################
     def clone(agentics_instance):
         copy_instance = copy(agentics_instance)
         copy_instance.states = deepcopy(agentics_instance.states)
@@ -167,6 +173,7 @@ class AG(BaseModel, Generic[T]):
         return new_self
 
     def get_random_sample(self, percent: float) -> AG:
+        """An AG is returned with randomly selected states, given the percentage of samples to return."""
         if not (0 <= percent <= 1):
             raise ValueError("Percent must be between 0 and 1")
 
@@ -175,9 +182,9 @@ class AG(BaseModel, Generic[T]):
         output.states = random.sample(self.states, sample_size)
         return output
 
-    ##############
-    ### LLMs  ####
-    ##############
+    #################
+    ##### LLMs  #####
+    #################
 
     @staticmethod
     def create_crewai_llm(**kwargs):
@@ -236,9 +243,9 @@ class AG(BaseModel, Generic[T]):
             return available_llms[provider_name]
         raise ValueError(f"Unknown provider: {provider_name}")
 
-    ##############################
-    #### List Functionalities ####
-    ##############################
+    ################################
+    ##### List Functionalities #####
+    ################################
 
     def __iter__(self):
         """Iterates over the list of states"""
@@ -256,9 +263,9 @@ class AG(BaseModel, Generic[T]):
         """Append the state into the list of states"""
         self.states.append(state)
 
-    ########################################
-    ###### Validation Functionalities ######
-    ########################################
+    ######################################
+    ##### Validation Functionalities #####
+    ######################################
 
     def validate(
         self, coerce: bool = False, return_error=False
@@ -330,9 +337,9 @@ class AG(BaseModel, Generic[T]):
             else:
                 return False
 
-    ########################################
-    #### aMapReduce Functionalities ########
-    ########################################
+    ######################################
+    ##### aMapReduce Functionalities #####
+    ######################################
 
     async def amap(self, func: StateOperator, timeout=None) -> AG:
         """Asynchronous map with exception-safe job gathering"""
@@ -369,7 +376,7 @@ class AG(BaseModel, Generic[T]):
                 _states.append(result)
         if self.verbose_transduction:
             if n_errors:
-                logger.debug(f"ERROR, {n_errors} states have not been transduced")
+                logger.debug(f"Error, {n_errors} states have not been transduced")
 
         self.states = _states
         return self
@@ -397,9 +404,9 @@ class AG(BaseModel, Generic[T]):
         self.states = [output] if isinstance(output, BaseModel) else output
         return self
 
-    ###############################
-    #### Import Functionalities ###
-    ###############################
+    ##################################
+    ##### Import Functionalities #####
+    ##################################
 
     @classmethod
     def from_states(cls, states: List[BaseModel], atype: BaseModel = None) -> AG:
@@ -577,12 +584,12 @@ class AG(BaseModel, Generic[T]):
                 c_row += 1
             return cls(states=states, atype=new_type)
 
-    ###############################
-    #### Export Functionalities ###
-    ###############################
+    ##################################
+    ##### Export Functionalities #####
+    ##################################
 
     def pretty_print(self):
-        output = f"Atype : {self.atype}\n"
+        output = f"aType : {self.atype}\n"
         for state in self.states:
             output += (
                 yaml.dump(
@@ -627,9 +634,9 @@ class AG(BaseModel, Generic[T]):
         data = [state.model_dump() for state in self.states]
         return pd.DataFrame(data)
 
-    ##########################################
-    ##### Logical Transduction ###############
-    ##########################################
+    ################################
+    ##### Logical Transduction #####
+    ################################
 
     async def __lshift__(self, other):
         """This is a transduction operation projecting a list of pydantic objects of into a target types
@@ -773,8 +780,8 @@ class AG(BaseModel, Generic[T]):
             )
             transduced_results = await pt.execute(
                 *input_prompts,
-                description=f"Transducing  {self.atype.__name__} << {
-                    "DefaultType" if not isinstance(other, AG) else other.atype.__name__}",
+                description=f"Transducing {self.__name__} << {'AG[str]' if not isinstance(other, AG) else other.__name__}",
+                transient_pbar=self.transient_pbar
             )
         except Exception as e:
             transduced_results = self.states
@@ -791,7 +798,7 @@ class AG(BaseModel, Generic[T]):
                 output_states.append(result)
         if self.verbose_transduction:
             if n_errors:
-                logger.debug(f"⚠️  {n_errors} states have not been transduced")
+                logger.debug(f"Error: {n_errors} states have not been transduced")
 
         if self.transduction_logs_path:
             with open(self.transduction_logs_path, "a") as f:
@@ -872,9 +879,9 @@ class AG(BaseModel, Generic[T]):
         output = await output_process
         return output
 
-    #####################################
-    ### Atype Manipulation Functions ####
-    #####################################
+    ########################################
+    ##### aType Manipulation Functions #####
+    ########################################
 
     def __call__(self, *fields, persist: Optional[Union[bool, List[str]]] = None) -> AG:
         """
@@ -932,9 +939,7 @@ class AG(BaseModel, Generic[T]):
                     description=self.atype.model_fields[field].description,
                 ),
             )
-        prod_atype = create_model(
-            f"{self.atype.__name__}__{other.atype.__name__}", **new_fields
-        )
+        prod_atype = create_model(f"{self.__name__}__{other.__name__}", **new_fields)
 
         extended_ags = []
         for state in self.states:
@@ -977,7 +982,7 @@ class AG(BaseModel, Generic[T]):
             )
 
         merged_atype = create_model(
-            f"{self.atype.__name__}__merge__{other.atype.__name__}", **new_fields
+            f"{self.__name__}__merge__{other.__name__}", **new_fields
         )
 
         # 2) Pairwise merge states (right wins on value conflicts)
@@ -1140,7 +1145,7 @@ class AG(BaseModel, Generic[T]):
         )
 
         # Create a new model with the added field
-        new_model = create_model(f"{self.atype.__name__}_extended", **fields)
+        new_model = create_model(f"{self.__name__}_extended", **fields)
 
         # Optionally re-assign it to self.atype
         return self.rebind_atype(new_model)

@@ -11,6 +11,8 @@ from typing import (
     Optional,
     Type,
     TypeVar,
+    Callable,
+    Sequence,
     Union,
     get_origin,
 )
@@ -18,7 +20,6 @@ from typing import (
 import httpx
 import pandas as pd
 from dotenv import load_dotenv
-from json_schema_to_pydantic import create_model as json_create_model
 from loguru import logger
 from openai import APIStatusError, AsyncOpenAI
 from pydantic import BaseModel, Field, create_model
@@ -34,6 +35,7 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from numerize.numerize import numerize
 
 A = TypeVar("A", bound=BaseModel)
 
@@ -233,7 +235,7 @@ def make_all_fields_optional(
             Field(default=None, title=field.title, description=field.description),
         )
 
-    new_name = rename_type or f"{model_cls.__name__}Optional"
+    new_name = rename_type or f"{model_cls.__name__} (optional)"
     return create_model(new_name, **fields)
 
 
@@ -243,38 +245,75 @@ def is_str_or_list_of_str(input):
     )
 
 
-async def gather_with_progress(
-    coros: Iterable[Awaitable[Any]],
+async def async_odered_progress(
+    inputs: Sequence[Any],
+    work: Callable[[Any], Awaitable[Any]],
     description: str = "Working",
-    return_exceptions: bool = False,
+    timeout: Optional[float] = None,
+    transient_pbar: bool = False,
 ) -> list[Any]:
     """Show a Rich progress bar while awaiting async execution."""
-    columns = (
-        SpinnerColumn(),
-        TimeElapsedColumn(),
-        TextColumn(f"[bold]{description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TransductionSpeed(),
-        TimeRemainingColumn(),
-    )
+    if transient_pbar:
+        columns = (
+            SpinnerColumn(style="grey50"),
+            StyledColumn(TimeElapsedColumn()),
+            TextColumn("{task.description}", style="grey50"),
+            BarColumn(
+                bar_width=40,
+                style="grey30",
+                complete_style="grey58",
+                finished_style="grey62",
+                pulse_style="grey50",
+            ),
+            StyledColumn(MofNCompleteColumn()),
+            StyledColumn(TransductionSpeed()),
+            StyledColumn(TimeRemainingColumn()),
+        )
+    else:
+        columns = (
+            SpinnerColumn(),
+            TimeElapsedColumn(),
+            TextColumn(f"[bold]{description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TransductionSpeed(),
+            TimeRemainingColumn(),
+        )
+    with Progress(*columns, transient=transient_pbar) as progress:
 
-    with Progress(*columns, transient=False) as progress:
-        task_id = progress.add_task(description, total=len(coros))
-
-        async def track(coro: Awaitable[Any]) -> Any:
+        async def track(index: int, coro: Awaitable[Any]) -> Any:
             try:
-                return await coro
+                return index, await coro
             except Exception as e:
-                if return_exceptions:
-                    return e
-                raise
+                return index, e  # TODO: we can put the retry here
             finally:
                 progress.advance(task_id)
 
-        return await asyncio.gather(
-            *(track(c) for c in coros), return_exceptions=return_exceptions
-        )
+        task_id = progress.add_task(description, total=len(inputs))
+        tasks = [asyncio.create_task(track(i, work(x))) for i, x in enumerate(inputs)]
+        results: list[Any] = [None] * len(tasks)
+
+        # complete and replace in original order
+        for fut in asyncio.as_completed(tasks, timeout=timeout):
+            i, val = await fut
+            results[i] = val
+        return results
+
+
+class StyledColumn(ProgressColumn):
+    """Apply a Rich style to the renderable of another column."""
+
+    def __init__(self, inner: ProgressColumn, style: str = "grey50"):
+        super().__init__()
+        self.inner = inner
+        self.style = style
+
+    def render(self, task: Task):
+        r = self.inner.render(task)
+        if isinstance(r, Text):
+            r.stylize(self.style)
+            return r
+        return Text(str(r), style=self.style)
 
 
 class TransductionSpeed(ProgressColumn):

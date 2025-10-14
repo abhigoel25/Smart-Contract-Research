@@ -24,8 +24,8 @@ class AGString(BaseModel):
     string: Optional[str] = None
 
 
-#####################################
-####### Utils #######################
+#################
+##### Utils #####
 
 
 def copy_attribute_values(
@@ -98,7 +98,6 @@ def get_pydantic_fields(atype: Type[BaseModel]):
 
 #     # Create DataFrame
 #     return pd.DataFrame(rows)
-
 
 def get_active_fields(state: BaseModel, allowed_fields: Set[str] = None) -> Set[str]:
     """
