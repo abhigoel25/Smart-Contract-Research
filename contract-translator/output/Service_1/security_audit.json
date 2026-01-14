@@ -1,0 +1,22 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "Hardcoded client address can lead to issues if the address needs to be changed.",
+    "The constructor sets a specific contract term that may not align with all use cases.",
+    "Fee payments are restricted to once a month, which may not be ideal for all payment scenarios.",
+    "Incorrect usage of percentages (e.g., annual increase should use a different mechanism for tracking).",
+    "Lack of proper access control on functions that modify sensitive states.",
+    "Timestamp-based payment restriction could lead to issues with submissions exactly on the due date."
+  ],
+  "recommendations": [
+    "Allow dynamic setting of the client address instead of hardcoding it in the constructor.",
+    "Consider adding a mechanism to update the contract term or manage terms dynamically.",
+    "Implement a scheduling mechanism that allows for payments to be made more flexibly.",
+    "Reassess the use of percentages and consider implementing an accrual system for penalties instead.",
+    "Add access control modifiers to sensitive functions where state changes occur.",
+    "Change the payment due date logic to prevent issues on boundaries of the timed conditions."
+  ],
+  "vulnerability_count": 6,
+  "security_score": "C"
+}

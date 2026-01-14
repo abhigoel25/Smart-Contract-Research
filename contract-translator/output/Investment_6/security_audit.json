@@ -1,0 +1,15 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The 'makeInvestment' function allows anyone to reset the investment amount to a fixed value, which could lead to incorrect states if called multiple times.",
+    "The current implementation does not enforce any checks on who can call the 'redeemShares' function. This could allow anyone to redeem shares, potentially causing financial loss."
+  ],
+  "recommendations": [
+    "Add access control to the 'makeInvestment' and 'redeemShares' functions to restrict access to authorized personnel only.",
+    "Consider implementing a payable function for investment that accepts ETH or tokens, rather than hardcoding the investment amount.",
+    "Remove the ability to reset investment amounts from the 'makeInvestment' function or allow for only certain conditions to change it."
+  ],
+  "vulnerability_count": 2,
+  "security_score": "C"
+}

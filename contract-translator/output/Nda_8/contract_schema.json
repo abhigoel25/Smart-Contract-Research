@@ -1,0 +1,73 @@
+{
+  "contract_type": "nda",
+  "title": "MUTUAL NON-DISCLOSURE AGREEMENT",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "Disclosing Party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "Receiving Party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 8, 2025",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "January 8, 2028",
+      "day_of_month": 8,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality and protect information with reasonable security measures.",
+      "deadline": null,
+      "penalty_for_breach": "Breach causes irreparable harm; entitled to injunctive relief and specific performance."
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Limit disclosure to employees/contractors with a need-to-know on a confidential basis.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Use information only for stated evaluation purposes.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Not reverse-engineer or attempt to derive underlying principles.",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Confidential Information excludes public domain information, independently developed information, and information rightfully received from third parties.",
+    "Confidentiality obligations survive termination of discussions.",
+    "Trade secrets are protected for as long as they remain trade secrets under applicable law."
+  ],
+  "conditions": {
+    "exceptions": "Receiving Party may disclose if required by law/court order, with prior written notice to Disclosing Party required when legally permitted."
+  },
+  "termination_conditions": [
+    "Termination of discussions results in the survival of obligations."
+  ]
+}

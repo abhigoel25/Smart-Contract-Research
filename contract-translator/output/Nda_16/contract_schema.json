@@ -1,0 +1,56 @@
+{
+  "contract_type": "nda",
+  "title": "MUTUAL NON-DISCLOSURE AGREEMENT",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "Disclosing Party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "Receiving Party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 8, 2025",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "January 8, 2028",
+      "day_of_month": 8,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality, protect information with reasonable security measures, limit disclosure to employees/contractors with need-to-know on confidential basis, use information only for stated evaluation purposes, not reverse-engineer or attempt to derive underlying principles",
+      "deadline": null,
+      "penalty_for_breach": "Breach causes irreparable harm for which monetary damages are inadequate"
+    }
+  ],
+  "special_terms": [
+    "Confidentiality Period: 3 years from disclosure date",
+    "Survival: Obligations survive termination of discussions",
+    "Trade Secrets: Protected for as long as they remain trade secrets under applicable law"
+  ],
+  "conditions": {
+    "exceptions": "Receiving Party may disclose if required by law/court order with prior written notice to Disclosing Party when legally permitted."
+  },
+  "termination_conditions": [
+    "Termination of discussions",
+    "Legal order compelling disclosure"
+  ]
+}

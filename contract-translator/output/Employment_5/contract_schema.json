@@ -1,0 +1,82 @@
+{
+  "contract_type": "employment",
+  "title": "EMPLOYMENT AGREEMENT",
+  "parties": [
+    {
+      "name": "TechCorp Industries, Inc.",
+      "role": "employer",
+      "address": "not specified",
+      "email": "not specified",
+      "entity_type": "company"
+    },
+    {
+      "name": "Robert Johnson",
+      "role": "employee",
+      "address": "456 Oak Avenue, San Francisco, CA 94102",
+      "email": "not specified",
+      "entity_type": "individual"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 150000.0,
+      "currency": "USD",
+      "purpose": "salary",
+      "frequency": "annual",
+      "due_date": "monthly"
+    },
+    {
+      "amount": 25000.0,
+      "currency": "USD",
+      "purpose": "performance bonus",
+      "frequency": "annual",
+      "due_date": "not specified"
+    },
+    {
+      "amount": 5000.0,
+      "currency": "options",
+      "purpose": "stock options",
+      "frequency": "vesting over 4 years",
+      "due_date": "not specified"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "commencement",
+      "value": "February 1, 2025",
+      "day_of_month": 1,
+      "frequency": "one-time"
+    },
+    {
+      "date_type": "end",
+      "value": "February 1, 2028",
+      "day_of_month": 1,
+      "frequency": "one-time"
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "employee",
+      "description": "serve as Senior Software Engineer, developing enterprise-level applications, mentoring junior developers, and making architectural decisions",
+      "deadline": "not specified",
+      "penalty_for_breach": "not specified"
+    },
+    {
+      "party": "employer",
+      "description": "provide salary and benefits as outlined in the agreement",
+      "deadline": "not specified",
+      "penalty_for_breach": "not specified"
+    }
+  ],
+  "special_terms": [
+    "Confidentiality of all proprietary information must be maintained.",
+    "Non-Compete Period: 12 months post-employment within 100-mile radius of headquarters."
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Either party may terminate with 30 days written notice.",
+    "3 months base salary upon termination without cause.",
+    "Termination for cause includes breach of confidentiality, gross negligence, or policy violation."
+  ]
+}

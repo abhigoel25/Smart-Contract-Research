@@ -1,0 +1,98 @@
+{
+  "contract_type": "partnership",
+  "title": "Partnership Agreement",
+  "parties": [
+    {
+      "name": "Michael Chen",
+      "role": "Partner",
+      "address": "1234 Venture Street, San Francisco, CA 94103",
+      "email": null,
+      "entity_type": "individual"
+    },
+    {
+      "name": "Jessica Williams",
+      "role": "Partner",
+      "address": "5678 Innovation Drive, San Francisco, CA 94104",
+      "email": null,
+      "entity_type": "individual"
+    },
+    {
+      "name": "David Rodriguez",
+      "role": "Partner",
+      "address": "9012 Enterprise Lane, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "individual"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 200000.0,
+      "currency": "USD",
+      "purpose": "capital contribution",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 150000.0,
+      "currency": "USD",
+      "purpose": "capital contribution",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 150000.0,
+      "currency": "USD",
+      "purpose": "capital contribution",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-05",
+      "day_of_month": 5,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "intellectual_property",
+      "description": "cloud-based business intelligence software",
+      "location": null,
+      "quantity": null,
+      "value": null
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Partner A",
+      "description": "serve as Chief Executive Officer and Chief Technology Officer",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Partner B",
+      "description": "serve as Chief Financial Officer and Operations Manager",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Partner C",
+      "description": "serve as Chief Product Officer and Business Development",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Capital contributions determine ownership percentages",
+    "Unanimous consent required for major decisions",
+    "60 days notice for capital calls",
+    "90 days written notice for partner withdrawal",
+    "Right of first refusal for buyout"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Unanimous consent of all partners for dissolution"
+  ]
+}

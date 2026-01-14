@@ -1,0 +1,21 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "1. Lack of access control: The constructor does not set the companyAddress and investorAddress, meaning these addresses can never be changed after deployment. This may adversely affect ownership and governance.",
+    "2. No functions to set or update critical parameters like companyAddress or investorAddress, limiting contract flexibility and adaptability.",
+    "3. The redeemShares function emits a redemption event without any checks or actual redemption logic, which could lead to misuse or confusion.",
+    "4. The processInvestment function does not validate the incoming investment, allowing for arbitrary events to be emitted with any amount, leading to potential misuse.",
+    "5. Potential denial of service if the contract's obligation party is empty, as redeemShares will not perform as expected."
+  ],
+  "recommendations": [
+    "1. Introduce functions to set/update the companyAddress and investorAddress, ideally with access control to restrict access to only authorized parties.",
+    "2. Implement the actual logic and conditions for redeeming shares in the redeemShares function, to ensure it performs the intended functionality.",
+    "3. Add validation in the processInvestment function to ensure that the amount is significant and from an authorized caller.",
+    "4. Consider implementing checks in redeemShares that ensure obligations are valid before proceeding with the redemption.",
+    "5. Establish a mechanism for managing investment amounts and ensuring they align with the financial allocations ideally with further checks.",
+    "6. Implement proper access control (owner or admin role) for sensitive functions."
+  ],
+  "vulnerability_count": 5,
+  "security_score": "C"
+}

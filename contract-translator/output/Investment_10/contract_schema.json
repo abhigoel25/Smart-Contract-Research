@@ -1,0 +1,88 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "Company",
+      "address": "optional blockchain address",
+      "email": "optional",
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "Investor",
+      "address": "optional blockchain address",
+      "email": "optional",
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 8000000.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "total investment amount",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "redemption_trigger",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "shares",
+      "description": "Series A Preferred Stock",
+      "location": "optional",
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Company",
+      "description": "Redeem shares if no qualified IPO by redemption trigger date.",
+      "deadline": "12 months from redemption trigger event",
+      "penalty_for_breach": "optional"
+    },
+    {
+      "party": "Investor",
+      "description": "Must participate in company sale if approved by majority holders.",
+      "deadline": "upon company sale event",
+      "penalty_for_breach": "optional"
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat for Investor.",
+    "Quarterly and annual financial information rights for Investor.",
+    "Weighted average anti-dilution protection in down rounds."
+  ],
+  "conditions": {
+    "Pre-Money Valuation": 30000000,
+    "Post-Money Valuation": 40000000,
+    "Non-Cumulative Dividend": "8% annual return",
+    "Participating Preferred": "Investors participate pro-rata in remaining proceeds.",
+    "Preference Multiple": "1x non-participating in liquidation events."
+  },
+  "termination_conditions": [
+    "Redemption condition if no qualified IPO by January 1, 2030."
+  ]
+}

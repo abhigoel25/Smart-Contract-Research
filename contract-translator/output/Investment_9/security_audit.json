@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "Lack of access control mechanisms for state-changing functions.",
+    "The `executeInvestment` and `fulfillObligation` functions lack validation of the caller's authority.",
+    "Potential gas limit issues with dynamic arrays when retrieving parties, financial terms, dates, assets, and obligations.",
+    "Information leaks through getters can expose sensitive details about parties and financial terms."
+  ],
+  "recommendations": [
+    "Implement access control to ensure only authorized addresses can invoke state-changing functions, possibly using OpenZeppelin's Ownable or AccessControl.",
+    "Consider using a more efficient storage pattern for large arrays to manage gas limits.",
+    "Modify getter functions to return limited sensitive information or only provide necessary public data.",
+    "Evaluate if it's necessary to store certain sensitive information on-chain, or if off-chain solutions could be used."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

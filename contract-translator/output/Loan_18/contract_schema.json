@@ -1,0 +1,108 @@
+{
+  "contract_type": "loan",
+  "title": "PROMISSORY NOTE AND LOAN AGREEMENT",
+  "parties": [
+    {
+      "name": "Capital Finance Group, LLC",
+      "role": "lender",
+      "address": "555 Finance Plaza, Boston, MA 02101",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "GreenTech Solutions, Inc.",
+      "role": "borrower",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 500000.0,
+      "currency": "USD",
+      "purpose": "loan",
+      "frequency": "one-time",
+      "due_date": "February 1, 2025"
+    },
+    {
+      "amount": 9934.0,
+      "currency": "USD",
+      "purpose": "monthly payment",
+      "frequency": "monthly",
+      "due_date": "March 1, 2025"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "contract date",
+      "value": "January 10, 2025",
+      "day_of_month": 10,
+      "frequency": null
+    },
+    {
+      "date_type": "disbursement date",
+      "value": "February 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "first payment due",
+      "value": "March 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "loan term end",
+      "value": "January 10, 2030",
+      "day_of_month": 10,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "goods",
+      "description": "equipment purchased with loan proceeds",
+      "location": null,
+      "quantity": null,
+      "value": null
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Borrower",
+      "description": "maintain insurance on collateral at full value",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Borrower",
+      "description": "repay loan with specified monthly payments",
+      "deadline": "March 1, 2025 and monthly thereafter",
+      "penalty_for_breach": "5% late payment fee"
+    },
+    {
+      "party": "Lender",
+      "description": "hold first security interest in equipment",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Borrower may prepay without penalty",
+    "Early prepayment discounts of 3% if paid within 12 months"
+  ],
+  "conditions": {
+    "default": [
+      "Payment 15+ days late",
+      "bankruptcy filing",
+      "breach of covenants"
+    ],
+    "acceleration": "Entire remaining balance becomes immediately due",
+    "default_interest_rate": 12
+  },
+  "termination_conditions": [
+    "Default triggers acceleration of payment",
+    "Loan can be terminated upon bankruptcy filing"
+  ]
+}

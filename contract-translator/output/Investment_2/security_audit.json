@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The `setObligation` function does not have any access control for non-company/investor parties trying to set obligations, which could cause unwanted obligations to be set.",
+    "The `redeemShares` function does not check if shares have been previously redeemed, which could lead to a potential misuse if called multiple times.",
+    "There are potential timestamp manipulation risks associated with the use of `block.timestamp`, whereby miners can manipulate the timestamp in some situations.",
+    "The `meetObligation` function allows anyone to mark an obligation as met if the deadline hasn't passed, which could be exploited."
+  ],
+  "recommendations": [
+    "Implement role-based access control for the `setObligation` function, ensuring that obligations can only be set by the intended party.",
+    "Add a state variable or a simple boolean to keep track of whether shares have been redeemed in the `redeemShares` function, preventing duplicate redemptions.",
+    "Consider using block.number or other mechanisms alongside `block.timestamp` for additional dependency checks or impose time constraints based on expected behavior.",
+    "Modify the `meetObligation` function to ensure only the party responsible for the obligation can mark it as met, preventing unauthorized parties from meeting obligations."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

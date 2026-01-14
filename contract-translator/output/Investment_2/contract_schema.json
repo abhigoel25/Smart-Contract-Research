@@ -1,0 +1,88 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware",
+      "email": "optional",
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware",
+      "email": "optional",
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "total investment amount",
+      "frequency": "one-time",
+      "due_date": "optional"
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": "optional"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 1, 2025",
+      "day_of_month": 1,
+      "frequency": "optional"
+    },
+    {
+      "date_type": "end",
+      "value": "January 1, 2030",
+      "day_of_month": 1,
+      "frequency": "optional"
+    }
+  ],
+  "assets": [
+    {
+      "type": "equity",
+      "description": "Series A Preferred Stock",
+      "location": "optional",
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "BlockChain Innovations Inc.",
+      "description": "redeem shares if no qualified IPO by January 1, 2030",
+      "deadline": "12 months from redemption trigger event",
+      "penalty_for_breach": "optional"
+    },
+    {
+      "party": "Venture Capital Fund VII, LP",
+      "description": "must participate in company sale if approved by majority holders",
+      "deadline": "upon approval",
+      "penalty_for_breach": "optional"
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat",
+    "Right to maintain ownership percentage in future financings",
+    "Weighted average anti-dilution protection in down rounds",
+    "8% annual return non-cumulative dividend",
+    "1x non-participating in liquidation events",
+    "Participating preferred for remaining proceeds"
+  ],
+  "conditions": {
+    "redemption": "if no qualified IPO",
+    "preferred_stock": "participating preferred and liquidation rights"
+  },
+  "termination_conditions": [
+    "upon failure to conduct a qualified IPO by January 1, 2030"
+  ]
+}

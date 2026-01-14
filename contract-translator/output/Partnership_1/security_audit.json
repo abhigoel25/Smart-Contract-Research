@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The 'contributeCapital' function emits an event for capital contribution but does not actually transfer any funds, which may lead to confusion about the state of capital contribution.",
+    "The contract does not validate that the 'party' in the 'assignObligation' function corresponds to an active partner, which could lead to inconsistencies in obligations.",
+    "The use of string types for identifying parties and financial terms may lead to potential issues with data integrity and querying.",
+    "The current implementation does not include functionality for handling potential reentrancy attacks when dealing with fund transfers (if implemented in the future)."
+  ],
+  "recommendations": [
+    "Implement actual fund transfer logic in the 'contributeCapital' function and validate against the necessary ERC20/ERC721 standards.",
+    "Add a check in the 'assignObligation' function to ensure that the provided party exists and is active.",
+    "Consider using a more robust way to identify parties, such as an enumeration or a mapping for better integrity and efficiency.",
+    "Introduce mechanisms to handle reentrancy issues, possibly by using the Checks-Effects-Interactions pattern if any external calls are made in future function implementations."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

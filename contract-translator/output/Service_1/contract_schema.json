@@ -1,0 +1,96 @@
+{
+  "contract_type": "service",
+  "title": "SERVICE AGREEMENT",
+  "parties": [
+    {
+      "name": "CloudTech Solutions, Inc.",
+      "role": "service provider",
+      "address": "888 Tech Boulevard, Seattle, WA 98101",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "MediCare Network, Inc.",
+      "role": "client",
+      "address": "444 Health Center Drive, Chicago, IL 60601",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 15000.0,
+      "currency": "USD",
+      "purpose": "monthly fee",
+      "frequency": "monthly",
+      "due_date": "first of each month"
+    },
+    {
+      "amount": 5000.0,
+      "currency": "USD",
+      "purpose": "setup fee",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 3.0,
+      "currency": "percent",
+      "purpose": "annual increase for renewals",
+      "frequency": "annual",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "March 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "March 1, 2026",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "payment_due",
+      "value": "due on first of each month",
+      "day_of_month": 1,
+      "frequency": "monthly"
+    }
+  ],
+  "assets": [
+    {
+      "type": "services",
+      "description": "Cloud Infrastructure Management and Technical Support",
+      "location": null,
+      "quantity": null,
+      "value": null
+    }
+  ],
+  "obligations": [
+    {
+      "party": "CloudTech Solutions, Inc.",
+      "description": "Provide 24/7 Monitoring, Technical Support, and Monthly Optimization",
+      "deadline": null,
+      "penalty_for_breach": "10% monthly credit for each hour below 99.95% uptime guarantee"
+    },
+    {
+      "party": "MediCare Network, Inc.",
+      "description": "Pay agreed fees on time as specified",
+      "deadline": "within net 30 days from invoice",
+      "penalty_for_breach": "1.5% per month on overdue amounts"
+    }
+  ],
+  "special_terms": [
+    "Service Level Agreement with 99.95% uptime guarantee",
+    "Monthly Maintenance Window of 4 hours during off-peak hours",
+    "Transition Support for 30 days included after termination"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Either party may terminate with 60 days written notice",
+    "Early Termination Fee: 2 months of service fees if terminated before 12 months"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "contract_type": "nda",
+  "title": "MUTUAL NON-DISCLOSURE AGREEMENT",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "disclosing party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "receiving party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 8, 2025",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "3 years from disclosure date",
+      "day_of_month": null,
+      "frequency": "3 years"
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality, protect information with reasonable security measures",
+      "deadline": null,
+      "penalty_for_breach": "Breach causes irreparable harm for which monetary damages are inadequate"
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Limit disclosure to employees/contractors with need-to-know on confidential basis",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Use information only for stated evaluation purposes",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Not reverse-engineer or attempt to derive underlying principles",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Confidential Information may be disclosed to evaluate feasibility and potential partnership terms.",
+    "Trade Secrets protected for as long as they remain trade secrets under applicable law."
+  ],
+  "conditions": {
+    "exceptions": "Receiving Party may disclose if required by law/court order, prior written notice to Disclosing Party required when legally permitted."
+  },
+  "termination_conditions": [
+    "Obligations survive termination of discussions."
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware, USA",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware, USA",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "total investment amount",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "January 1, 2030",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "shares",
+      "description": "Series A Preferred Stock",
+      "location": null,
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Investor",
+      "description": "Must participate in company sale if approved by majority holders (drag-along rights).",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Company",
+      "description": "Must redeem shares if no qualified IPO by January 1, 2030.",
+      "deadline": "January 1, 2030",
+      "penalty_for_breach": "Shares must be redeemed at original purchase price plus accrued but unpaid dividends."
+    }
+  ],
+  "special_terms": [
+    "Right to maintain ownership percentage in future financings (pro-rata rights).",
+    "Quarterly unaudited and annual audited financial statements (information rights).",
+    "Preferred stock investors participate pro-rata in remaining proceeds (participating preferred).",
+    "8% annual return on non-cumulative dividend."
+  ],
+  "conditions": {
+    "anti_dilution": "Weighted average anti-dilution protection in down rounds.",
+    "pre_money_valuation": 30000000,
+    "post_money_valuation": 40000000,
+    "investor_ownership": "25% post-investment"
+  },
+  "termination_conditions": [
+    "Contract may terminate upon the execution of a qualified IPO.",
+    "Contract will be negated if the redemption rights are exercised."
+  ]
+}

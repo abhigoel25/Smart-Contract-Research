@@ -1,0 +1,60 @@
+{
+  "contract_type": "nda",
+  "title": "MUTUAL NON-DISCLOSURE AGREEMENT",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "Disclosing Party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "Receiving Party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-08",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "2028-01-08",
+      "day_of_month": 8,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality, protect information with reasonable security measures, limit disclosure to employees/contractors with need-to-know on confidential basis, use information only for stated evaluation purposes, not reverse-engineer or attempt to derive underlying principles.",
+      "deadline": null,
+      "penalty_for_breach": "Breach causes irreparable harm for which monetary damages are inadequate."
+    }
+  ],
+  "special_terms": [
+    "Confidential Information includes technical data, source code, algorithms, business plans, financial projections, customer lists, trade secrets, proprietary methodologies, software, specifications, and know-how.",
+    "Confidentiality Period lasts for 3 years from the disclosure date.",
+    "Trade secrets are protected for as long as they remain trade secrets under applicable law."
+  ],
+  "conditions": {
+    "exclusions": [
+      "Public domain information",
+      "Independently developed information",
+      "Rightfully received from third parties"
+    ],
+    "exceptions": "Receiving Party may disclose if required by law/court order with prior written notice to Disclosing Party."
+  },
+  "termination_conditions": [
+    "Obligations survive termination of discussions."
+  ]
+}

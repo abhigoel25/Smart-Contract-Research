@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The contract does not handle the addresses for the company and investor. Using address(0) raises concerns and may lead to vulnerabilities if not addressed properly.",
+    "The 'parseDate' function is a stub with no implementation. This can introduce issues related to date handling and could allow invalid date checks.",
+    "There are no mechanisms for transferring funds or shares. Any financial transactions remain speculative as the contract lacks necessary controls.",
+    "The triggerInvestment and redeemShares functions have no access control, meaning any user can call these functions without proper authorization, which poses a security risk."
+  ],
+  "recommendations": [
+    "Implement proper checks to assign valid addresses to company and investor instead of using address(0). Consider adding functions to set these addresses securely.",
+    "Fully implement the 'parseDate' function to correctly convert date strings into UNIX timestamps to ensure accurate deadline checks and operations.",
+    "Introduce mechanisms to handle fund transfers, such as receiving and sending Ether tokens or handling share distributions.",
+    "Add access control for the 'triggerInvestment' and 'redeemShares' functions. Consider using modifiers or role-based access controls to restrict who can call these functions."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

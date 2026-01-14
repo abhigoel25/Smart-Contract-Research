@@ -1,0 +1,98 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "obligationIndex",
+        "type": "uint256"
+      }
+    ],
+    "name": "fulfillObligation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getNDAData",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "disclosingPartyName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "disclosingPartyAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "receivingPartyName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "receivingPartyAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "startDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "endDate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "tuple[]",
+        "name": "obligations",
+        "type": "tuple[]",
+        "components": [
+          {
+            "internalType": "string",
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "internalType": "bool",
+            "name": "isMet",
+            "type": "bool"
+          }
+        ]
+      },
+      {
+        "internalType": "string",
+        "name": "conditions",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "terminationConditions",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "message",
+        "type": "string"
+      }
+    ],
+    "name": "NDAEvent",
+    "type": "event"
+  }
+]

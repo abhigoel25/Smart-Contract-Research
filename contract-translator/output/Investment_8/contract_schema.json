@@ -1,0 +1,81 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware",
+      "email": "optional",
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware",
+      "email": "optional",
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "total investment amount",
+      "frequency": "one-time",
+      "due_date": "optional"
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": "optional"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": "optional"
+    },
+    {
+      "date_type": "redemption",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": "optional"
+    }
+  ],
+  "assets": [
+    {
+      "type": "equity",
+      "description": "Series A Preferred Stock",
+      "location": "optional",
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "BlockChain Innovations Inc.",
+      "description": "must redeem shares if no qualified IPO by January 1, 2030",
+      "deadline": "12 months from redemption trigger event",
+      "penalty_for_breach": "original purchase price plus accrued but unpaid dividends"
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat",
+    "Quarterly unaudited and annual audited financial statements",
+    "Right to maintain ownership percentage in future financings",
+    "Must participate in company sale if approved by majority holders",
+    "8% annual return non-cumulative dividend",
+    "Participating Preferred share conditions",
+    "1x non-participating preference multiple in liquidation events",
+    "Weighted average anti-dilution protection in down rounds"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Redemption rights can trigger termination of the shareholding agreement"
+  ]
+}

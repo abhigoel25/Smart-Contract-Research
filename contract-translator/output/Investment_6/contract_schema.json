@@ -1,0 +1,84 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware",
+      "email": "optional",
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware",
+      "email": "optional",
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "investment",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "redemption_trigger",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "equity",
+      "description": "Series A Preferred Stock",
+      "location": "optional",
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "BlockChain Innovations Inc.",
+      "description": "must redeem shares if no qualified IPO by redemption trigger date",
+      "deadline": "12 months from January 1, 2030",
+      "penalty_for_breach": "optional"
+    }
+  ],
+  "special_terms": [
+    "Board observer seat for investor",
+    "Quarterly unaudited and annual audited financial statements",
+    "Right to maintain ownership percentage in future financings",
+    "Must participate in company sale if approved by majority holders",
+    "8% annual return non-cumulative dividend",
+    "1x non-participating in liquidation events",
+    "Weighted average anti-dilution protection in down rounds"
+  ],
+  "conditions": {
+    "pre_money_valuation": 30000000,
+    "post_money_valuation": 40000000,
+    "investor_ownership": 25
+  },
+  "termination_conditions": [
+    "contract may be terminated if redemption rights are exercised and shares are not redeemed within the stipulated timeline"
+  ]
+}

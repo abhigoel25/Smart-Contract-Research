@@ -1,0 +1,89 @@
+{
+  "contract_type": "sales",
+  "title": "SALES AND PURCHASE AGREEMENT",
+  "parties": [
+    {
+      "name": "TechGear Manufacturing LLC",
+      "role": "seller",
+      "address": "789 Industrial Park, Austin, TX 78701",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "RetailChain Corp",
+      "role": "buyer",
+      "address": "321 Commerce Street, New York, NY 10001",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 1275000.0,
+      "currency": "USD",
+      "purpose": "down payment",
+      "frequency": "one-time",
+      "due_date": "upon signing"
+    },
+    {
+      "amount": 1700000.0,
+      "currency": "USD",
+      "purpose": "payment upon production completion",
+      "frequency": "one-time",
+      "due_date": "upon production completion"
+    },
+    {
+      "amount": 1275000.0,
+      "currency": "USD",
+      "purpose": "payment upon delivery and inspection",
+      "frequency": "one-time",
+      "due_date": "upon delivery and inspection"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "effective",
+      "value": "December 20, 2024",
+      "day_of_month": 20,
+      "frequency": null
+    },
+    {
+      "date_type": "delivery",
+      "value": "January 31, 2025",
+      "day_of_month": 31,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "goods",
+      "description": "Industrial Robotic Arms, Model X-500",
+      "location": "Buyer's warehouse in New Jersey",
+      "quantity": 50,
+      "value": 4250000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Seller",
+      "description": "Deliver goods free from defects and provide warranty",
+      "deadline": "within 24 months from delivery",
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Buyer",
+      "description": "Inspect goods and report any defects",
+      "deadline": "within 15 days for inspection and 30 days for reporting defects",
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Shipping method is ground transportation with insurance coverage",
+    "Delivery cost to be borne by Seller"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Either party may terminate if payment not received by due date",
+    "Termination fee is 10% of undelivered goods value"
+  ]
+}

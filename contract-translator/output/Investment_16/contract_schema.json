@@ -1,0 +1,80 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 8000000.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "total investment amount",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "redemption_trigger",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "equity",
+      "description": "Series A Preferred Stock",
+      "location": null,
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "company",
+      "description": "redeem shares if no qualified IPO by January 1, 2030",
+      "deadline": "12 months from redemption trigger event",
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat for the investor",
+    "Quarterly unaudited and annual audited financial statements provided to the investor",
+    "Right to maintain ownership percentage in future financings",
+    "Must participate in company sale if approved by majority holders"
+  ],
+  "conditions": {
+    "anti_dilution": "weighted average anti-dilution protection in down rounds",
+    "dividend": "8% annual return (non-cumulative)"
+  },
+  "termination_conditions": [
+    "If a qualified IPO does not occur by January 1, 2030"
+  ]
+}

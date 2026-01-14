@@ -1,0 +1,16 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "No validation for investment amount in makeInvestment function, which could lead to unexpected behaviors.",
+    "The redemption process does not check if the company has previously met obligations.",
+    "No fallback function or receive function to handle Ether transactions, which may limit investment methods."
+  ],
+  "recommendations": [
+    "Implement a function to validate the investment amount and ensure appropriate functionality related to the investment.",
+    "Include checks to ensure that obligations are met before shares are redeemed.",
+    "Consider adding a receive or fallback function to handle incoming Ether transactions if the contract is intended to accept payments."
+  ],
+  "vulnerability_count": 3,
+  "security_score": "C"
+}

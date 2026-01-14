@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The contract does not include any function to actually handle investments, which means funds are not accepted.",
+    "The `makeInvestment` function emits an event but does not change any state or perform any actions regarding financial transactions.",
+    "The `redeemShares` function does not check if the caller is authorized to redeem shares; this could lead to unauthorized redemptions.",
+    "The contract does not have any checks for the amounts involved in investment and share redemption, which could lead to erroneous state management."
+  ],
+  "recommendations": [
+    "Implement a function that allows accepting and managing investments within the contract.",
+    "Add proper validation to ensure that only the designated investor can call the `redeemShares` function.",
+    "Implement checks to ensure that the amount being invested does not exceed the total investment.",
+    "Add functionality to track individual contributions if multiple investors are intended."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

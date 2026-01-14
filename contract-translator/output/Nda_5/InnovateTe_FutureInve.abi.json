@@ -1,0 +1,146 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "obligationId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum MutualNonDisclosureAgreement.ObligationStatus",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "name": "updateObligationStatus",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "terminateContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "obligationId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getObligation",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "description",
+        "type": "string"
+      },
+      {
+        "internalType": "enum MutualNonDisclosureAgreement.ObligationStatus",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "penaltyForBreach",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getSpecialTerms",
+    "outputs": [
+      {
+        "internalType": "string[]",
+        "name": "terms",
+        "type": "string[]"
+      },
+      {
+        "internalType": "string",
+        "name": "conditions",
+        "type": "string"
+      },
+      {
+        "internalType": "string[]",
+        "name": "terminationConditions",
+        "type": "string[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "obligationId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "description",
+        "type": "string"
+      }
+    ],
+    "name": "ObligationCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "obligationId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum MutualNonDisclosureAgreement.ObligationStatus",
+        "name": "status",
+        "type": "uint8"
+      }
+    ],
+    "name": "ObligationUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [],
+    "name": "ContractTerminated",
+    "type": "event"
+  },
+  {
+    "internalType": "address",
+    "name": "disclosingParty",
+    "type": "address"
+  },
+  {
+    "internalType": "address",
+    "name": "receivingParty",
+    "type": "address"
+  },
+  {
+    "internalType": "uint256",
+    "name": "obligationCount",
+    "type": "uint256"
+  },
+  {
+    "internalType": "struct MutualNonDisclosureAgreement.SpecialTerms",
+    "name": "specialTerms",
+    "type": "tuple"
+  }
+]

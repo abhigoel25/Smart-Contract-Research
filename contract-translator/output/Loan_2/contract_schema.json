@@ -1,0 +1,101 @@
+{
+  "contract_type": "loan",
+  "title": "Promissory Note and Loan Agreement",
+  "parties": [
+    {
+      "name": "Capital Finance Group, LLC",
+      "role": "lender",
+      "address": "555 Finance Plaza, Boston, MA 02101",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "GreenTech Solutions, Inc.",
+      "role": "borrower",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 500000.0,
+      "currency": "USD",
+      "purpose": "loan",
+      "frequency": "one-time",
+      "due_date": "February 1, 2025"
+    },
+    {
+      "amount": 9934.0,
+      "currency": "USD",
+      "purpose": "monthly payment",
+      "frequency": "monthly",
+      "due_date": "March 1, 2025"
+    },
+    {
+      "amount": 10000.0,
+      "currency": "USD",
+      "purpose": "origination fee",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "loan_disbursement",
+      "value": "February 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "first_payment_due",
+      "value": "March 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "loan_term_start",
+      "value": "January 10, 2025",
+      "day_of_month": 10,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "goods",
+      "description": "equipment purchased with loan proceeds",
+      "location": null,
+      "quantity": null,
+      "value": null
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Borrower",
+      "description": "maintains insurance on collateral at full value",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Borrower",
+      "description": "repay loan amount as per repayment schedule",
+      "deadline": "monthly until completion of term",
+      "penalty_for_breach": "Default interest rate of 12% per annum on unpaid balance"
+    }
+  ],
+  "special_terms": [
+    "Early prepayment discounts: 3% if paid within 12 months",
+    "Borrower may prepay without penalty"
+  ],
+  "conditions": {
+    "default_triggers": [
+      "Payment 15+ days late",
+      "bankruptcy filing",
+      "breach of covenants"
+    ],
+    "acceleration": "Entire remaining balance becomes immediately due"
+  },
+  "termination_conditions": [
+    "Contract can be terminated upon default as defined above"
+  ]
+}

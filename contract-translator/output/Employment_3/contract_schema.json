@@ -1,0 +1,75 @@
+{
+  "contract_type": "employment",
+  "title": "Employment Agreement",
+  "parties": [
+    {
+      "name": "TechCorp Industries, Inc.",
+      "role": "employer",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Robert Johnson",
+      "role": "employee",
+      "address": "456 Oak Avenue, San Francisco, CA 94102",
+      "email": null,
+      "entity_type": "individual"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 150000.0,
+      "currency": "USD",
+      "purpose": "salary",
+      "frequency": "annual",
+      "due_date": "monthly"
+    },
+    {
+      "amount": 25000.0,
+      "currency": "USD",
+      "purpose": "performance bonus",
+      "frequency": "annual",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "commencement",
+      "value": "February 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "duration",
+      "value": "January 15, 2028",
+      "day_of_month": null,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "employee",
+      "description": "serve as Senior Software Engineer, developing enterprise-level applications, mentoring junior developers, and making architectural decisions",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "employer",
+      "description": "provide compensation, benefits, and support as outlined in the agreement",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "At-will employment; either party may terminate with 30 days written notice",
+    "3 months base salary severance upon termination without cause",
+    "12 months non-compete period within 100-mile radius of headquarters"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Either party may terminate with 30 days written notice",
+    "Termination for cause includes breach of confidentiality, gross negligence, or policy violation"
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "contract_type": "nda",
+  "title": "Mutual Non-Disclosure Agreement",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "Disclosing Party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "Receiving Party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-08",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "confidentiality_period_end",
+      "value": "2028-01-08",
+      "day_of_month": 8,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality and protect information with reasonable security measures",
+      "deadline": null,
+      "penalty_for_breach": "Entitled to injunctive relief and specific performance"
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Limit disclosure to employees/contractors with need-to-know on confidential basis",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Use information only for stated evaluation purposes",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Not reverse-engineer or attempt to derive underlying principles",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Excludes public domain information, independently developed information, and information rightfully received from third parties.",
+    "Receiving Party may disclose if required by law/court order after prior written notice to Disclosing Party."
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Obligations survive termination of discussions.",
+    "Trade Secrets are protected for as long as they remain trade secrets under applicable law."
+  ]
+}

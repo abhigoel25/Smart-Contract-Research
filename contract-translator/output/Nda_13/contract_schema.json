@@ -1,0 +1,73 @@
+{
+  "contract_type": "nda",
+  "title": "Mutual Non-Disclosure Agreement",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "disclosing party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "receiving party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 8, 2025",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "Confidentiality Period",
+      "value": "3 years from disclosure date",
+      "day_of_month": null,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality and protect information with reasonable security measures.",
+      "deadline": null,
+      "penalty_for_breach": "Entitled to injunctive relief and specific performance."
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Limit disclosure to employees/contractors with need-to-know on confidential basis.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Use information only for stated evaluation purposes.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Not reverse-engineer or attempt to derive underlying principles.",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Confidential Information includes technical data, source code, algorithms, business plans, financial projections, customer lists, trade secrets, proprietary methodologies, software, specifications, and know-how.",
+    "Excludes public domain information, independently developed information, rightfully received from third parties."
+  ],
+  "conditions": {
+    "exceptions": "Receiving Party may disclose if required by law/court order, with prior written notice to Disclosing Party when legally permitted."
+  },
+  "termination_conditions": [
+    "Obligations survive termination of discussions.",
+    "Trade Secrets protected for as long as they remain trade secrets under applicable law."
+  ]
+}

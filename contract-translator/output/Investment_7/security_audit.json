@@ -1,0 +1,16 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The contract does not handle investment funds transfer, which may lead to loss of funds.",
+    "There is no mechanism to prevent the company from redeeming shares multiple times after the first redemption.",
+    "The contract does not validate if the company and investor addresses are not zero addresses."
+  ],
+  "recommendations": [
+    "Implement a payment mechanism to safely handle the investment funds.",
+    "Add a check to ensure that shares can only be redeemed once.",
+    "Include checks in the constructor to ensure that company and investor addresses are valid (not zero addresses)."
+  ],
+  "vulnerability_count": 3,
+  "security_score": "C"
+}

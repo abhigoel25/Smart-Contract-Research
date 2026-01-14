@@ -1,0 +1,85 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware",
+      "email": null,
+      "entity_type": "limited partnership"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "investment",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "equity",
+      "description": "Series A Preferred Stock",
+      "location": null,
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "company",
+      "description": "redeem shares if no qualified IPO by January 1, 2030",
+      "deadline": "12 months from redemption trigger event",
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat",
+    "Quarterly unaudited and annual audited financial statements",
+    "Right to maintain ownership percentage in future financings",
+    "Must participate in company sale if approved by majority holders",
+    "Weighted average anti-dilution protection in down rounds",
+    "8% annual return non-cumulative dividend",
+    "Participating Preferred investors participate pro-rata in remaining proceeds",
+    "1x non-participating preference in liquidation events"
+  ],
+  "conditions": {
+    "pre_money_valuation": 30000000,
+    "post_money_valuation": 40000000,
+    "investor_ownership": "25% post-investment"
+  },
+  "termination_conditions": [
+    "Company must redeem shares if no qualified IPO by January 1, 2030"
+  ]
+}

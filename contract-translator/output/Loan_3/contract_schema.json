@@ -1,0 +1,126 @@
+{
+  "contract_type": "loan",
+  "title": "Promissory Note and Loan Agreement",
+  "parties": [
+    {
+      "name": "Capital Finance Group, LLC",
+      "role": "lender",
+      "address": "555 Finance Plaza, Boston, MA 02101",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "GreenTech Solutions, Inc.",
+      "role": "borrower",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 500000.0,
+      "currency": "USD",
+      "purpose": "loan",
+      "frequency": "one-time",
+      "due_date": "February 1, 2025"
+    },
+    {
+      "amount": 9934.0,
+      "currency": "USD",
+      "purpose": "monthly payment",
+      "frequency": "monthly",
+      "due_date": "each month starting March 1, 2025"
+    },
+    {
+      "amount": 10000.0,
+      "currency": "USD",
+      "purpose": "origination fee",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 5.0,
+      "currency": "percent",
+      "purpose": "late payment fee",
+      "frequency": "per occurrence",
+      "due_date": null
+    },
+    {
+      "amount": 3.0,
+      "currency": "percent",
+      "purpose": "early prepayment discount",
+      "frequency": "one-time",
+      "due_date": "if paid within 12 months"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 10, 2025",
+      "day_of_month": 10,
+      "frequency": null
+    },
+    {
+      "date_type": "disbursement",
+      "value": "February 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "first payment due",
+      "value": "March 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "January 10, 2030",
+      "day_of_month": 10,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "goods",
+      "description": "equipment purchased with loan proceeds",
+      "location": null,
+      "quantity": null,
+      "value": null
+    }
+  ],
+  "obligations": [
+    {
+      "party": "borrower",
+      "description": "make monthly payments",
+      "deadline": "on or before each due date",
+      "penalty_for_breach": "late payment fee of 5% of overdue amount"
+    },
+    {
+      "party": "borrower",
+      "description": "maintain insurance on collateral at full value",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Borrower may prepay without penalty",
+    "Entire remaining balance becomes due upon default"
+  ],
+  "conditions": {
+    "default_triggers": [
+      "Payment 15+ days late",
+      "bankruptcy filing",
+      "breach of covenants"
+    ],
+    "default_interest_rate": {
+      "rate": 12,
+      "currency": "percent",
+      "term": "per annum on unpaid balance"
+    }
+  },
+  "termination_conditions": [
+    "Contract can be terminated upon default",
+    "Acceleration of the entire remaining balance"
+  ]
+}

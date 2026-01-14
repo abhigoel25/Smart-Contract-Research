@@ -1,0 +1,14 @@
+{
+  "severity_level": "low",
+  "approved": true,
+  "issues": [
+    "Storing addresses as strings instead of using Ethereum address type.",
+    "No access control for the addObligation function; any user can add obligations."
+  ],
+  "recommendations": [
+    "Change the 'address' field in the Party struct to use the address type to prevent incorrect address formats.",
+    "Implement access control on the addObligation function to limit who can add obligations, such as using modifiers to restrict access to specific roles or parties."
+  ],
+  "vulnerability_count": 2,
+  "security_score": "B"
+}

@@ -1,0 +1,81 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "investment",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": "one-time",
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "redemption_trigger",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "equity",
+      "description": "Series A Preferred Stock",
+      "location": null,
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "BlockChain Innovations Inc.",
+      "description": "Redeem shares if no qualified IPO by January 1, 2030",
+      "deadline": "12 months from redemption trigger event",
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat for the investor",
+    "Quarterly unaudited and annual audited financial statements provided to investor",
+    "Right to maintain ownership percentage in future financings",
+    "Investors must participate in company sale if approved by majority holders",
+    "8% annual return on a non-cumulative dividend",
+    "Investors participate pro-rata in remaining proceeds",
+    "1x preference multiple in liquidation events",
+    "Weighted average anti-dilution protection in down rounds"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Not specified, but implicit in redemption rights and failure to go public by January 1, 2030"
+  ]
+}

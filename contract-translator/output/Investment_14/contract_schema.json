@@ -1,0 +1,86 @@
+{
+  "contract_type": "investment",
+  "title": "Series A Preferred Stock Purchase Agreement",
+  "parties": [
+    {
+      "name": "BlockChain Innovations Inc.",
+      "role": "company",
+      "address": "Delaware",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Venture Capital Fund VII, LP",
+      "role": "investor",
+      "address": "Delaware",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 10000000.0,
+      "currency": "USD",
+      "purpose": "purchase price",
+      "frequency": "one-time",
+      "due_date": null
+    },
+    {
+      "amount": 8.0,
+      "currency": "USD",
+      "purpose": "purchase price per share",
+      "frequency": null,
+      "due_date": null
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "2025-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "redemption_trigger",
+      "value": "2030-01-01",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "shares",
+      "description": "Series A Preferred Stock",
+      "location": null,
+      "quantity": 1250000,
+      "value": 10000000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "BlockChain Innovations Inc.",
+      "description": "must redeem shares if no qualified IPO by January 1, 2030",
+      "deadline": "January 1, 2030",
+      "penalty_for_breach": "redemption price includes accrued but unpaid dividends"
+    },
+    {
+      "party": "Venture Capital Fund VII, LP",
+      "description": "participate in the company sale if approved by majority holders",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "One designated board observer seat",
+    "Quarterly unaudited and annual audited financial statements",
+    "Right to maintain ownership percentage in future financings",
+    "Weighted average anti-dilution protection in down rounds",
+    "Participating Preferred: Investors participate pro-rata in remaining proceeds",
+    "1x non-participating in liquidation events",
+    "40% of proceeds for product development, 35% for sales and marketing, 15% for operations and administration, 10% for working capital reserve"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "If no qualified IPO by January 1, 2030"
+  ]
+}

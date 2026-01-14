@@ -1,0 +1,16 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "1. Lack of access control: Public functions such as invest(), redeemShares(), and addSpecialTerm() can be called by anyone, potentially allowing unauthorized actions.",
+    "2. No validation on the investor and company addresses: The addresses for company and investor are set to address(0) in the constructor which means they cannot be interacted with correctly. This could cause issues in the contract's logic.",
+    "3. No reentrancy protection in invest() and redeemShares() functions, which could allow unexpected state changes if an external contract calls these functions."
+  ],
+  "recommendations": [
+    "1. Implement access control using modifiers (like `onlyOwner`) to restrict who can call certain functions.",
+    "2. Modify the constructor to require the correct addresses for the company and the investor, and potentially add functions to modify these later securely.",
+    "3. Consider implementing reentrancy guards in critical functions, particularly those that change the state or assets of the contract."
+  ],
+  "vulnerability_count": 3,
+  "security_score": "C"
+}

@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The onlyDisclosingParty and onlyReceivingParty modifiers are using the address(this) check which is incorrect. They should compare against actual addresses of the parties involved.",
+    "The contract does not have a mechanism to properly set or change party addresses, leading to potential trust issues.",
+    "There is a lack of access control on addObligation which allows anyone to add obligations, not just the receiving party.",
+    "Start date and confidentiality period settings are hard-coded and not adjustable post-deployment."
+  ],
+  "recommendations": [
+    "Implement storage variables for the actual addresses of the disclosing and receiving parties and adjust modifiers accordingly.",
+    "Consider mechanisms for allowing parties to modify or update their contact details.",
+    "Restrict addObligation to the actual receiving party's address.",
+    "Allow for dynamic setting of start date and confidentiality periods during deployment."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

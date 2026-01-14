@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The contract does not check for reentrancy in functions that can send funds.",
+    "The `makeInvestment` function can only be called by the investor but assumes the investor is set before the function call, which can lead to issues if not addressed.",
+    "The `setRedemptionEvent` function does not validate the timestamp provided, which may allow setting a past timestamp or zero, leading to logical bugs.",
+    "The contract lacks proper access control mechanisms around critical state-changing functions."
+  ],
+  "recommendations": [
+    "Implement a reentrancy guard to prevent attacks during fund transfer.",
+    "Ensure that the investor is set before allowing investments and consider changing the investment logic to require the investor's address to be set initially.",
+    "Add checks in `setRedemptionEvent` to validate the provided timestamp is in the future and non-zero.",
+    "Consider adding more detailed access control or role management to prevent unauthorized access to sensitive functions."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

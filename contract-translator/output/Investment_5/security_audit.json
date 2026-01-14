@@ -1,0 +1,16 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The contract does not check for the correct quantity of shares being redeemed. An arbitrary quantity can be passed without validation.",
+    "The contract allows the investor to call the makeInvestment() function without any actual transfer of funds, leading to potential misuse.",
+    "The fixed share quantity of 1,250,000 is hardcoded, which may not reflect the intended dynamic requirements in different scenarios."
+  ],
+  "recommendations": [
+    "Implement a check in the redeemShares() function to ensure that the quantity redeemed does not exceed the available shares.",
+    "Require an actual transfer of investment funds within the makeInvestment() function to ensure the investment is legitimate and only occurs when funds are sent.",
+    "Consider making the share quantity a configurable parameter or explicitly allow it to be set based on investment amounts."
+  ],
+  "vulnerability_count": 3,
+  "security_score": "C"
+}

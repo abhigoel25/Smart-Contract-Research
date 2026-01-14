@@ -1,0 +1,19 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "Company and investor addresses can be set to zero addresses, potentially leading to loss of access to important functionalities.",
+    "Lack of access control on critical functions which allows anyone to change financial terms and dates.",
+    "Incomplete implementations of obligation fulfillment functions, giving the potential to emit events without validation.",
+    "No validation or checks on the logic flow in makeInvestment, fulfillCompanyObligation, and fulfillInvestorObligation, which could allow unintended effects."
+  ],
+  "recommendations": [
+    "Implement access control measures (e.g., Ownable pattern) to restrict who can set addresses and financial terms.",
+    "Ensure that setting addresses cannot be done to address(0) or provide mechanisms to prevent it.",
+    "Validate that obligations are being fulfilled properly before emitting events.",
+    "Enhance makeInvestment to revert on zero value investments or provide meaningful feedback to the caller.",
+    "Consider introducing modifiers or require statements to enforce logic before executing critical functions."
+  ],
+  "vulnerability_count": 5,
+  "security_score": "C"
+}

@@ -1,0 +1,18 @@
+{
+  "severity_level": "medium",
+  "approved": false,
+  "issues": [
+    "The contract does not correctly handle overflows and underflows since it relies on Solidity 0.8.0, which includes built-in overflow checks but may have missed potential cases in logic that are not arithmetic.",
+    "The function `invest()` does not enforce proper checks for the investor's balance and limits. If an attacker manages to invoke this function outside of regular conditions, they could lock up funds without valid checks.",
+    "The `companyRedeemShares()` function does not check if the contract is already terminated before allowing share redemption.",
+    "The manner in which shares are redeemed could lead to unexpected behavior if not handled, especially in a case where a subsequent call may interfere with share redemption logic."
+  ],
+  "recommendations": [
+    "Add checks for proper balance handling and ensure no excess ether is sent by any investor.",
+    "Consider implementing a state variable to track whether shares have already been redeemed or terminated, providing additional safeguards against double spending or erroneous state changes.",
+    "Ensure appropriate access control is in place for all critical state-changing functions. It might be beneficial to have a time-lock mechanism for sensitive changes.",
+    "Enhance the logic in `meetObligation()` to clearly differentiate obligations and ensure they are handled separately with proper condition checks before proceeding."
+  ],
+  "vulnerability_count": 4,
+  "security_score": "C"
+}

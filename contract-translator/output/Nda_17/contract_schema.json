@@ -1,0 +1,67 @@
+{
+  "contract_type": "nda",
+  "title": "Mutual Non-Disclosure Agreement",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "Disclosing Party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "Receiving Party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 8, 2025",
+      "day_of_month": 8,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality and protect information with reasonable security measures.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Limit disclosure to employees/contractors with need-to-know basis.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Use information only for stated evaluation purposes.",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Receiving Party",
+      "description": "Not reverse-engineer or attempt to derive underlying principles.",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Confidentiality Period: 3 years from disclosure date.",
+    "Obligations survive termination of discussions.",
+    "Trade Secrets: Protected for as long as they remain trade secrets under applicable law."
+  ],
+  "conditions": {
+    "exceptions": "Receiving Party may disclose if required by law/court order with prior written notice to Disclosing Party."
+  },
+  "termination_conditions": [
+    "Obligations survive termination of discussions."
+  ]
+}

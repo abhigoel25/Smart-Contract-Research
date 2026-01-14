@@ -1,0 +1,51 @@
+{
+  "contract_type": "nda",
+  "title": "Mutual Non-Disclosure Agreement",
+  "parties": [
+    {
+      "name": "InnovateTech Ventures, LLC",
+      "role": "Disclosing Party",
+      "address": "333 Startup Way, San Francisco, CA 94105",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "FutureInvest Capital Partners",
+      "role": "Receiving Party",
+      "address": "777 Investment Drive, New York, NY 10005",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "January 8, 2025",
+      "day_of_month": 8,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "January 8, 2028",
+      "day_of_month": 8,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Receiving Party",
+      "description": "Maintain strict confidentiality, protect information with reasonable security measures, limit disclosure to employees/contractors with need-to-know on confidential basis, use information only for stated evaluation purposes, not reverse-engineer or attempt to derive underlying principles",
+      "deadline": null,
+      "penalty_for_breach": "Irreparable harm for which monetary damages are inadequate, entitled to injunctive relief and specific performance"
+    }
+  ],
+  "special_terms": [
+    "Exceptions for disclosure if required by law/court order with prior written notice to Disclosing Party"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Obligations survive termination of discussions"
+  ]
+}

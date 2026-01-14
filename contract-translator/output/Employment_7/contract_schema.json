@@ -1,0 +1,82 @@
+{
+  "contract_type": "employment",
+  "title": "Employment Agreement",
+  "parties": [
+    {
+      "name": "TechCorp Industries, Inc.",
+      "role": "employer",
+      "address": null,
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "Robert Johnson",
+      "role": "employee",
+      "address": "456 Oak Avenue, San Francisco, CA 94102",
+      "email": null,
+      "entity_type": "individual"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 150000.0,
+      "currency": "USD",
+      "purpose": "salary",
+      "frequency": "monthly",
+      "due_date": null
+    },
+    {
+      "amount": 25000.0,
+      "currency": "USD",
+      "purpose": "performance bonus",
+      "frequency": "annual",
+      "due_date": null
+    },
+    {
+      "amount": 5000.0,
+      "currency": "options",
+      "purpose": "stock options",
+      "frequency": "vesting over 4 years",
+      "due_date": "after 1-year cliff"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "start",
+      "value": "February 1, 2025",
+      "day_of_month": 1,
+      "frequency": null
+    },
+    {
+      "date_type": "end",
+      "value": "February 1, 2028",
+      "day_of_month": 1,
+      "frequency": null
+    }
+  ],
+  "assets": [],
+  "obligations": [
+    {
+      "party": "Employee",
+      "description": "Serve as Senior Software Engineer, develop enterprise-level applications, mentor junior developers, and make architectural decisions",
+      "deadline": null,
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Employer",
+      "description": "Provide full health insurance coverage and 401(k) with 5% employer match",
+      "deadline": null,
+      "penalty_for_breach": null
+    }
+  ],
+  "special_terms": [
+    "Employee agrees to maintain confidentiality of all proprietary information",
+    "Non-Compete Period: 12 months post-employment within 100-mile radius of headquarters"
+  ],
+  "conditions": {},
+  "termination_conditions": [
+    "Either party may terminate with 30 days written notice",
+    "Severance: 3 months base salary upon termination without cause",
+    "Cause for termination includes breach of confidentiality, gross negligence, or policy violation"
+  ]
+}

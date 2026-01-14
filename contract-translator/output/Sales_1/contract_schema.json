@@ -1,0 +1,93 @@
+{
+  "contract_type": "sales",
+  "title": "Sales and Purchase Agreement",
+  "parties": [
+    {
+      "name": "TechGear Manufacturing LLC",
+      "role": "seller",
+      "address": "789 Industrial Park, Austin, TX 78701",
+      "email": null,
+      "entity_type": "company"
+    },
+    {
+      "name": "RetailChain Corp",
+      "role": "buyer",
+      "address": "321 Commerce Street, New York, NY 10001",
+      "email": null,
+      "entity_type": "company"
+    }
+  ],
+  "financial_terms": [
+    {
+      "amount": 1275000.0,
+      "currency": "USD",
+      "purpose": "down payment",
+      "frequency": "one-time",
+      "due_date": "upon signing"
+    },
+    {
+      "amount": 1700000.0,
+      "currency": "USD",
+      "purpose": "payment upon production completion",
+      "frequency": "one-time",
+      "due_date": "upon production completion"
+    },
+    {
+      "amount": 1275000.0,
+      "currency": "USD",
+      "purpose": "payment upon delivery and inspection",
+      "frequency": "one-time",
+      "due_date": "upon delivery and inspection"
+    }
+  ],
+  "dates": [
+    {
+      "date_type": "contract_date",
+      "value": "December 20, 2024",
+      "day_of_month": 20,
+      "frequency": null
+    },
+    {
+      "date_type": "delivery",
+      "value": "January 31, 2025",
+      "day_of_month": 31,
+      "frequency": null
+    }
+  ],
+  "assets": [
+    {
+      "type": "goods",
+      "description": "Industrial Robotic Arms, Model X-500",
+      "location": "Buyer's warehouse in New Jersey",
+      "quantity": 50,
+      "value": 4250000.0
+    }
+  ],
+  "obligations": [
+    {
+      "party": "Seller",
+      "description": "Deliver goods",
+      "deadline": "January 31, 2025",
+      "penalty_for_breach": null
+    },
+    {
+      "party": "Buyer",
+      "description": "Inspect goods within 15 days",
+      "deadline": "15 days post-delivery",
+      "penalty_for_breach": "Any defects must be reported within 30 days"
+    }
+  ],
+  "special_terms": [
+    "Seller warrants goods free from defects for 24 months from delivery",
+    "Manufacturer warranty transferred to Buyer",
+    "Defective units subject to replacement or repair"
+  ],
+  "conditions": {
+    "payment": {
+      "payment_not_received": "Either party may terminate if payment not received by due date"
+    }
+  },
+  "termination_conditions": [
+    "Termination Fee: 10% of undelivered goods value"
+  ]
+}

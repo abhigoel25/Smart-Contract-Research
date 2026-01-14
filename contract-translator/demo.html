@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IBM Agentics Contract Translator - Complete Demo</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const icons = {
+      upload: () => <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto mb-4 text-gray-400" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+      loader: () => <svg xmlns="http://www.w3.org/2000/svg" className="animate-spin mx-auto mb-4 text-purple-400" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M22 12a10 10 0 0 1-10 10" /></svg>,
+      check: () => <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 text-green-400" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>,
+      file: () => <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 text-purple-400" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 2h10l6 6v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 20 8"/></svg>,
+      chain: () => <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 text-blue-400" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M9 6h6M6 9v6M18 9v6"/></svg>,
+      chat: () => <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 text-cyan-400" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+      error: () => <svg xmlns="http://www.w3.org/2000/svg" className="mr-2 text-red-400" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+    };
+
+    // Step Progress Component
+    function StepIndicator({ current, total, labels }) {
+      return (
+        <div className="flex justify-between mb-12">
+          {labels.map((label, i) => {
+            const num = i + 1;
+            return (
+              <div key={num} className="flex flex-col items-center flex-1">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold mb-2 transition-all ${current >= num ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg" : "bg-gray-700 text-gray-400"}`}>{num}</div>
+                <span className={`text-sm text-center ${current >= num ? "text-purple-300 font-medium" : "text-gray-500"}`}>{label}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // Main Demo App
+    function ContractTranslatorDemo() {
+      // Workflow state
+      const [phase, setPhase] = useState(0); // 0-6 for 6 phases
+      const [contractType, setContractType] = useState('sales'); // sales, employment, investment, nda, etc
+      const [contractFile, setContractFile] = useState(null);
+      const [currentPhaseInfo, setCurrentPhaseInfo] = useState({
+        title: '',
+        status: '',
+        output: '',
+        progress: 0
+      });
+      
+      // Post-generation state
+      const [generatedData, setGeneratedData] = useState({
+        solidity: '',
+        abi: '',
+        schema: '',
+        audit: '',
+        mcp: ''
+      });
+
+      // Audit approval state
+      const [showAuditModal, setShowAuditModal] = useState(false);
+      const [auditData, setAuditData] = useState(null);
+      const [currentSessionId, setCurrentSessionId] = useState(null);
+
+      // Deployment state
+      const [deploymentStep, setDeploymentStep] = useState(0); // 0: Pre-deploy, 1: Deploying, 2: Deployed, 3: MCP Running
+      const [contractAddress, setContractAddress] = useState('');
+      const [privateKey, setPrivateKey] = useState('');
+      const [rpcUrl, setRpcUrl] = useState('http://127.0.0.1:7545');
+      const [mcpServerRunning, setMcpServerRunning] = useState(false);
+      const [deploymentLoading, setDeploymentLoading] = useState(false);
+      const [deploymentError, setDeploymentError] = useState(null);
+
+      // Chatbot state
+      const [chatMessages, setChatMessages] = useState([
+        { role: 'assistant', content: '🤖 Initializing chatbot...' }
+      ]);
+      const [chatInput, setChatInput] = useState('');
+      const [chatLoading, setChatLoading] = useState(false);
+      const [apiConnected, setApiConnected] = useState(false);
+      const [apiConnecting, setApiConnecting] = useState(true);
+
+      // Auto-connect to API on mount
+      useEffect(() => {
+        const checkApi = async () => {
+          try {
+            const response = await fetch('http://localhost:5000/api/health');
+            if (response.ok) {
+              setApiConnected(true);
+              setChatMessages([
+                { role: 'assistant', content: '✅ Chatbot API connected!\n\nOnce you deploy your contract and configure the MCP server, you can interact with it using natural language.' }
+              ]);
+              setApiConnecting(false);
+            }
+          } catch (error) {
+            // API not available yet
+            setApiConnecting(false);
+            setChatMessages([
+              { role: 'assistant', content: '⏳ Waiting for chatbot API to initialize...\n\nIf this persists, try:\npython mcp/chatbot_api.py' }
+            ]);
+          }
+        };
+
+        // Try to connect immediately
+        checkApi();
+        
+        // Retry every 3 seconds
+        const interval = setInterval(checkApi, 3000);
+        
+        return () => clearInterval(interval);
+      }, []);
+
+      // Auto-trigger deployment after Phase 6 completes
+      const autoDeployTriggered = useRef(false);
+      
+      useEffect(() => {
+        // Debug: Log every time this effect runs
+        console.log('🔍 Auto-deploy useEffect check:', {
+          phase,
+          deploymentStep,
+          hasSolidity: !!generatedData.solidity,
+          deploymentLoading,
+          alreadyTriggered: autoDeployTriggered.current,
+          solidityLength: generatedData.solidity?.length || 0
+        });
+
+        // Trigger auto-deployment when:
+        // 1. All 6 phases complete (phase === 6)
+        // 2. We're in the ready state (deploymentStep === 0)
+        // 3. We have solidity code ready
+        if (phase === 6 && deploymentStep === 0 && generatedData.solidity && !deploymentLoading && !autoDeployTriggered.current) {
+          console.log('✅ Phase 6 complete - Preparing auto-deployment...');
+          autoDeployTriggered.current = true;
+          
+          // Schedule the deployment to happen after brief delay
+          const timer = setTimeout(async () => {
+            console.log('🚀 Executing auto-deployment...');
+            setDeploymentLoading(true);
+            setDeploymentError(null);
+            setDeploymentStep(1);
+            
+            try {
+              console.log('📝 Collected data for deployment:');
+              console.log('   Solidity code length:', generatedData.solidity?.length || 0);
+              console.log('   ABI available:', !!generatedData.abi);
+              console.log('   Schema available:', !!generatedData.schema);
+              if (generatedData.schema) {
+                console.log('   Schema details:', {
+                  contract_type: generatedData.schema.contract_type,
+                  parties: generatedData.schema.parties?.length || 0,
+                  terms: generatedData.schema.financial_terms?.length || 0
+                });
+              }
+              
+              if (!generatedData.solidity) {
+                throw new Error('No Solidity code available. Please complete all 6 translation phases first.');
+              }
+              
+              // Parse ABI if it's a string
+              let abiForDeploy = [];
+              if (generatedData.abi) {
+                try {
+                  abiForDeploy = typeof generatedData.abi === 'string' 
+                    ? JSON.parse(generatedData.abi) 
+                    : generatedData.abi;
+                } catch (e) {
+                  console.warn('Could not parse ABI, proceeding without it');
+                  abiForDeploy = [];
+                }
+              }
+              
+              console.log('📝 Calling /api/auto-deploy endpoint...');
+              const deploymentPayload = {
+                solidity: generatedData.solidity,
+                contract_name: contractType,
+                abi: abiForDeploy,
+                schema: generatedData.schema || {}
+              };
+              console.log('   Payload schema type:', typeof deploymentPayload.schema);
+              console.log('   Payload schema keys:', Object.keys(deploymentPayload.schema).slice(0, 5));
+              
+              const response = await fetch('http://localhost:5000/api/auto-deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(deploymentPayload)
+              });
+
+              const result = await response.json();
+              
+              if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Deployment failed');
+              }
+
+              console.log('✅ Deployment successful!', result);
+              
+              // Update with deployment details
+              setContractAddress(result.contract_address);
+              setPrivateKey(result.private_key);
+              setRpcUrl(result.rpc_url);
+              setDeploymentStep(2);
+
+              // Show deployment success
+              setChatMessages([
+                { role: 'assistant', content: `✅ Contract Deployed!\n\n📍 Address: ${result.contract_address}\n🌐 Network: ${result.rpc_url}\n\n✓ Ready for interaction` }
+              ]);
+
+              // Call auto-connect in separate function
+              await autoConnectMCP(result);
+
+            } catch (error) {
+              console.error('❌ Auto-deployment error:', error);
+              setDeploymentError(error.message);
+              setDeploymentStep(0);
+              autoDeployTriggered.current = false; // Allow retry
+              setChatMessages([
+                { role: 'assistant', content: `❌ Deployment failed: ${error.message}\n\n💡 Troubleshooting:\n1. Make sure Ganache is running on http://127.0.0.1:7545\n2. Check the terminal for detailed error logs\n3. Ensure you have web3 and py-solc-x installed: pip install web3 py-solc-x` }
+              ]);
+            } finally {
+              setDeploymentLoading(false);
+            }
+          }, 500);
+          
+          return () => clearTimeout(timer);
+        }
+      }, [phase, deploymentStep, generatedData.solidity, deploymentLoading]);
+
+      // Sample contract types
+      const contractTypes = [
+        { id: 'sales', name: 'Sales Agreement', icon: '🛒' },
+        { id: 'employment', name: 'Employment Contract', icon: '💼' },
+        { id: 'investment', name: 'Investment Agreement', icon: '💰' },
+        { id: 'nda', name: 'NDA', icon: '🔒' },
+        { id: 'rental', name: 'Rental Agreement', icon: '🏠' },
+        { id: 'loan', name: 'Loan Agreement', icon: '🏦' },
+        { id: 'other', name: 'Other', icon: '📝' }
+      ];
+
+      // Phase descriptions
+      const phaseDescriptions = [
+        { title: 'Phase 1: Document Processing', icon: '📄', color: 'from-blue-500 to-cyan-500' },
+        { title: 'Phase 2: Contract Analysis', icon: '🔍', color: 'from-purple-500 to-pink-500' },
+        { title: 'Phase 3: Code Generation', icon: '⚙️', color: 'from-green-500 to-emerald-500' },
+        { title: 'Phase 4: Security Audit', icon: '🔐', color: 'from-yellow-500 to-orange-500' },
+        { title: 'Phase 5: ABI Generation', icon: '📋', color: 'from-red-500 to-rose-500' },
+        { title: 'Phase 6: MCP Server Generation', icon: '🤖', color: 'from-indigo-500 to-purple-500' }
+      ];
+
+      // Start translation process - WITH REAL-TIME SERVER-SENT EVENTS STREAMING AND AUDIT APPROVAL
+      const startTranslation = async () => {
+        setPhase(1);
+        
+        if (!contractFile) {
+          alert("Please upload a file first");
+          return;
+        }
+        
+        try {
+          // Create FormData with the actual file
+          const formData = new FormData();
+          const fileInput = document.querySelector('input[type="file"]');
+          if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+            throw new Error('No file found in input. Please upload a PDF file.');
+          }
+          
+          formData.append('file', fileInput.files[0]);
+          console.log('🔵 Starting real-time SSE stream to /api/translate-stream');
+          console.log('   File:', fileInput.files[0].name);
+          
+          // Call the translation API with Server-Sent Events
+          const response = await fetch('http://localhost:5000/api/translate-stream', {
+            method: 'POST',
+            body: formData
+          });
+          
+          console.log('🟡 SSE connection established, status:', response.status);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ API error response:', errorText);
+            throw new Error(`API error (${response.status}): ${errorText.substring(0, 200)}`);
+          }
+
+          // Read SSE stream
+          console.log('🟡 Opening event stream reader...');
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              console.log('🟢 SSE stream ended');
+              break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines[lines.length - 1]; // Keep incomplete line in buffer
+
+            for (let i = 0; i < lines.length - 1; i++) {
+              const line = lines[i];
+              if (line.startsWith('data: ')) {
+                try {
+                  const eventData = JSON.parse(line.slice(6));
+                  console.log(`📡 Phase ${eventData.phase} event received:`, eventData.data.message);
+                  
+                  if (eventData.error) {
+                    console.error('❌ Stream error:', eventData.error);
+                    throw new Error(eventData.error);
+                  }
+
+                  // Handle Phase 4 (Security Audit) with approval pause
+                  if (eventData.phase === 4 && eventData.status === 'needs_approval') {
+                    console.log('⏸️  Security audit needs approval - showing modal...');
+                    setPhase(4);
+                    setAuditData(eventData.data);
+                    setCurrentSessionId(eventData.session_id);
+                    
+                    setCurrentPhaseInfo({
+                      title: 'Security Audit - Review Required',
+                      status: '⏸️ Waiting for Approval',
+                      output: `Security issues detected - please review and approve to continue`,
+                      progress: 65
+                    });
+                    
+                    // Show the audit modal
+                    setShowAuditModal(true);
+                    
+                    // Wait for user to make a decision
+                    // This will be handled by the handleAuditApproval function
+                    continue; // Don't process further until user responds
+                  }
+
+                  // Update UI based on phase
+                  const phaseNum = eventData.phase;
+                  setPhase(phaseNum);
+
+                  const progressMap = { 1: 25, 2: 35, 3: 50, 4: 65, 5: 80, 6: 100 };
+                  const titleMap = {
+                    1: 'Document Processing',
+                    2: 'Contract Analysis',
+                    3: 'Code Generation',
+                    4: 'Security Audit',
+                    5: 'ABI Generation',
+                    6: 'MCP Server Generation'
+                  };
+
+                  setCurrentPhaseInfo({
+                    title: titleMap[phaseNum] || `Phase ${phaseNum}`,
+                    status: '✓ Complete',
+                    output: eventData.data.message,
+                    progress: progressMap[phaseNum] || 0
+                  });
+
+                  // Store generated data as we receive it
+                  // Phase 2: Capture schema from Contract Analysis
+                  if (phaseNum === 2 && eventData.data) {
+                    const schemaToStore = eventData.data.schema || eventData.data;
+                    setGeneratedData(prev => ({ ...prev, schema: schemaToStore }));
+                    console.log('✅ Schema stored from Phase 2:', {
+                      contract_type: schemaToStore.contract_type,
+                      parties_count: Array.isArray(schemaToStore.parties) ? schemaToStore.parties.length : 0,
+                      terms_count: Array.isArray(schemaToStore.financial_terms) ? schemaToStore.financial_terms.length : 0
+                    });
+                  }
+                  
+                  if (eventData.data.solidity) {
+                    setGeneratedData(prev => ({ ...prev, solidity: eventData.data.solidity }));
+                    console.log('✅ Solidity code stored:', eventData.data.solidity.substring(0, 100) + '...');
+                  }
+                  if (eventData.data.abi) {
+                    const abiData = typeof eventData.data.abi === 'string' 
+                      ? eventData.data.abi 
+                      : JSON.stringify(eventData.data.abi, null, 2);
+                    setGeneratedData(prev => ({ ...prev, abi: abiData }));
+                    console.log('✅ ABI stored');
+                  }
+                  if (eventData.data.mcp_server) {
+                    setGeneratedData(prev => ({ ...prev, mcp: eventData.data.mcp_server }));
+                    console.log('✅ MCP server code stored');
+                  }
+
+                } catch (e) {
+                  console.error('❌ Failed to parse SSE event:', line, e);
+                }
+              }
+            }
+          }
+
+          console.log('🟢 All phases completed successfully!');
+          setDeploymentStep(0);
+
+        } catch (error) {
+          console.error('❌ Translation error caught:', error);
+          console.error('Error name:', error.name);
+          console.error('Error message:', error.message);
+          console.error('Error stack:', error.stack);
+          setPhase(0);
+          const errorMessage = error.message || 'Unknown error occurred';
+          alert(`Translation failed: ${errorMessage}`);
+          setChatMessages([
+            { role: 'assistant', content: `❌ Error: ${errorMessage}\n\n💡 Troubleshooting:\n1. Check that chatbot_api.py is running on port 5000\n2. Check the terminal for detailed error messages\n3. Make sure your OPENAI_API_KEY is set in .env\n\n📋 Check browser console for more details` }
+          ]);
+        }
+      };
+
+      // Handle audit approval/rejection
+      const handleAuditApproval = async (approved) => {
+        console.log(`📝 User ${approved ? 'approved' : 'rejected'} security audit`);
+        
+        try {
+          // Send approval to backend
+          const response = await fetch('http://localhost:5000/api/audit-approval', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: currentSessionId,
+              approved: approved
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to send approval');
+          }
+
+          console.log('✓ Approval sent to backend');
+          setShowAuditModal(false);
+          
+          if (approved) {
+            setCurrentPhaseInfo(prev => ({
+              ...prev,
+              status: '✓ Approved',
+              output: 'Continuing with translation...'
+            }));
+          } else {
+            setPhase(0);
+            alert('Security audit rejected. Translation cancelled.');
+          }
+        } catch (error) {
+          console.error('❌ Error sending approval:', error);
+          alert('Failed to send approval: ' + error.message);
+        }
+      };
+
+      // Auto-deploy contract to testnet
+      const handleAutoDeploy = async () => {
+        console.log('🚀 Starting automated contract deployment...');
+        setDeploymentLoading(true);
+        setDeploymentError(null);
+        setDeploymentStep(1);
+        
+        try {
+          console.log('📝 Collected data for deployment:');
+          console.log('   Solidity code length:', generatedData.solidity?.length || 0);
+          console.log('   ABI available:', !!generatedData.abi);
+          
+          if (!generatedData.solidity) {
+            throw new Error('No Solidity code available. Please complete all 6 translation phases first.');
+          }
+          
+          // Parse ABI if it's a string
+          let abiForDeploy = [];
+          if (generatedData.abi) {
+            try {
+              abiForDeploy = typeof generatedData.abi === 'string' 
+                ? JSON.parse(generatedData.abi) 
+                : generatedData.abi;
+            } catch (e) {
+              console.warn('Could not parse ABI, proceeding without it');
+              abiForDeploy = [];
+            }
+          }
+          
+          console.log('📝 Calling /api/auto-deploy endpoint...');
+          const response = await fetch('http://localhost:5000/api/auto-deploy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              solidity: generatedData.solidity,
+              contract_name: contractType,
+              abi: abiForDeploy,
+              schema: {}
+            })
+          });
+
+          const result = await response.json();
+          
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Deployment failed');
+          }
+
+          console.log('✅ Deployment successful!', result);
+          
+          // Update with deployment details
+          setContractAddress(result.contract_address);
+          setPrivateKey(result.private_key);
+          setRpcUrl(result.rpc_url);
+          setDeploymentStep(2);
+
+          // Show deployment success
+          setChatMessages([
+            { role: 'assistant', content: `✅ Contract Deployed!\n\n📍 Address: ${result.contract_address}\n🌐 Network: ${result.rpc_url}\n\n🚀 Launching MCP Server...` }
+          ]);
+
+          // Now auto-connect to MCP server
+          console.log('🤖 Auto-connecting to MCP server...');
+          await autoConnectMCP(result);
+
+        } catch (error) {
+          console.error('❌ Auto-deployment error:', error);
+          setDeploymentError(error.message);
+          setDeploymentStep(0);
+          setChatMessages([
+            { role: 'assistant', content: `❌ Deployment failed: ${error.message}\n\n💡 Troubleshooting:\n1. Make sure Ganache is running on http://127.0.0.1:7545\n2. Check the terminal for detailed error logs\n3. Ensure you have web3 and py-solc-x installed: pip install web3 py-solc-x` }
+          ]);
+        } finally {
+          setDeploymentLoading(false);
+        }
+      };
+
+      // Auto-connect to MCP server
+      const autoConnectMCP = async (deploymentResult) => {
+        try {
+          console.log('⏳ Connecting to MCP server...');
+          
+          // Use MCP server path if available, otherwise use env file
+          const mcpPath = deploymentResult.mcp_server_path || deploymentResult.env_file;
+          
+          if (!mcpPath) {
+            console.warn('No MCP path available');
+            setMcpServerRunning(false);
+            setDeploymentStep(3);
+            setChatMessages([
+              { role: 'assistant', content: `✅ Contract deployment successful!\n\n📍 Address: ${deploymentResult.contract_address}\n\n⚠️ Note: MCP server not available. Contract is deployed but interactive tools aren't ready.` }
+            ]);
+            return;
+          }
+          
+          // Try to connect to MCP
+          const connectResponse = await fetch('http://localhost:5000/api/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mcp_path: mcpPath,
+              contract_type: contractType,
+              contract_address: deploymentResult.contract_address,
+              abi: generatedData.abi ? JSON.parse(generatedData.abi) : []
+            })
+          });
+
+          if (!connectResponse.ok) {
+            throw new Error(`Connect failed: HTTP ${connectResponse.status}`);
+          }
+
+          const connectResult = await connectResponse.json();
+          
+          if (connectResult.status === 'connected' || connectResult.status === 'already_connected') {
+            console.log('✅ MCP Server connected!', connectResult.tools);
+            setMcpServerRunning(true);
+            setDeploymentStep(3);
+            
+            const toolCount = connectResult.count || connectResult.tools?.length || 0;
+            const toolList = connectResult.tools && connectResult.tools.length > 0 
+              ? `\n\nAvailable tools: ${connectResult.tools.join(', ')}`
+              : '';
+            
+            setChatMessages([
+              { role: 'assistant', content: `✅ Deployment Complete!\n\n🎉 Your smart contract is deployed and ready to use.${toolList}\n\n💬 You can now interact with your contract by asking natural language questions like:\n• "What's the contract status?"\n• "Call the pay function"\n• "Show contract details"\n\nTry asking me something!` }
+            ]);
+          } else if (connectResult.status === 'deployed_only') {
+            // Contract deployed but MCP not available
+            setMcpServerRunning(false);
+            setDeploymentStep(3);
+            setChatMessages([
+              { role: 'assistant', content: `✅ Contract deployment successful!\n\n📍 Address: ${deploymentResult.contract_address}\n🌐 Network: ${deploymentResult.rpc_url}\n\n✓ Your contract is deployed and ready. Interactive tools will be available soon.` }
+            ]);
+          } else {
+            // Fallback
+            setMcpServerRunning(false);
+            setDeploymentStep(3);
+            setChatMessages([
+              { role: 'assistant', content: `✅ Contract deployment complete!\n\n📍 Address: ${deploymentResult.contract_address}\n🌐 Network: ${deploymentResult.rpc_url}` }
+            ]);
+          }
+        } catch (error) {
+          console.warn('⚠️ MCP connection issue:', error);
+          // Still mark deployment as successful even if MCP connection has issues
+          setMcpServerRunning(false);
+          setDeploymentStep(3);
+          setChatMessages([
+            { role: 'assistant', content: `✅ Contract deployment successful!\n\n📍 Address: ${deploymentResult.contract_address}\n\n⚠️ Note: MCP tools unavailable. Contract is deployed and usable.` }
+          ]);
+        }
+      };
+
+      // Download file helper
+      const downloadFile = (content, filename) => {
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      // Copy to clipboard
+      const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        alert('Copied to clipboard!');
+      };
+
+      // Chat message handler - connects to real chatbot API
+      const handleChatMessage = async () => {
+        if (!chatInput.trim()) return;
+
+        const userMessage = chatInput;  // Capture message before clearing
+        const userMsg = { role: 'user', content: userMessage };
+        setChatMessages(prev => [...prev, userMsg]);
+        setChatInput('');
+        setChatLoading(true);
+
+        try {
+          // Call the actual chatbot API
+          const response = await fetch('http://localhost:5000/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userMessage })  // Use captured message
+          });
+
+          const data = await response.json();
+
+          let botMessage = '';
+          if (data.success && data.tool_called) {
+            botMessage = `📞 Called ${data.tool_called}()\n✅ ${data.response}`;
+          } else if (data.error) {
+            botMessage = `❌ Error: ${data.error}`;
+          } else {
+            botMessage = data.response || 'No response from server';
+          }
+
+          setChatMessages(prev => [...prev, { role: 'assistant', content: botMessage }]);
+        } catch (error) {
+          // Fallback if API not available
+          const botMessage = `⚠️ API Connection Issue: ${error.message}\n\n💡 Make sure chatbot_api.py is running on port 5000\nCommand: python mcp/chatbot_api.py`;
+          setChatMessages(prev => [...prev, { role: 'assistant', content: botMessage }]);
+        }
+
+        setChatLoading(false);
+      };
+
+      return (
+        <div className="min-h-screen py-8 px-4">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-12">
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent mb-3 leading-none">
+                Agentics Smart Contract Translator
+              </h1>
+              <p className="text-gray-300 text-lg">End-to-End Smart Contract Generation & Deployment Demo</p>
+            </div>
+
+            {/* Phase 0: PDF Upload & Contract Type Selection */}
+            {phase === 0 && (
+              <div className="bg-gray-800 rounded-2xl p-8 mb-8 border border-gray-700">
+                <h2 className="text-2xl font-bold text-white mb-6">Upload Contract PDF</h2>
+                
+                {/* PDF Upload Section */}
+                <div className="border-2 border-dashed border-purple-500 rounded-xl p-8 mb-8 text-center bg-gray-900">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          const fileName = e.target.files[0].name;
+                          // Auto-detect contract type from filename
+                          let detectedType = 'sales';
+                          if (fileName.toLowerCase().includes('employment')) detectedType = 'employment';
+                          else if (fileName.toLowerCase().includes('investment')) detectedType = 'investment';
+                          else if (fileName.toLowerCase().includes('nda')) detectedType = 'nda';
+                          else if (fileName.toLowerCase().includes('rental')) detectedType = 'rental';
+                          else if (fileName.toLowerCase().includes('loan')) detectedType = 'loan';
+                          
+                          setContractFile({ name: fileName, type: detectedType });
+                          setContractType(detectedType);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center">
+                      <div className="text-5xl mb-4">📄</div>
+                      <h3 className="text-xl font-bold text-white mb-2">Click to Upload PDF Contract</h3>
+                      <p className="text-gray-400 text-sm">or drag and drop your contract file here</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* File Info */}
+                {contractFile && (
+                  <div className="bg-gray-700 rounded-lg p-4 mb-8 border border-purple-500">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">✓</span>
+                        <div>
+                          <p className="text-white font-semibold">{contractFile.name}</p>
+                          <p className="text-sm text-gray-400">Detected Type: <span className="text-purple-300 font-semibold">{contractFile.type.charAt(0).toUpperCase() + contractFile.type.slice(1)}</span></p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setContractFile(null)}
+                        className="text-gray-400 hover:text-white transition-all"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Detected Contract Type */}
+                {contractFile && (
+                  <div className="mb-8">
+                    <h3 className="text-lg font-bold text-white mb-4">Detected Contract Type</h3>
+                    <div className="bg-gray-700 rounded-lg p-6">
+                      <div className="flex items-center gap-4 mb-4">
+                        <span className="text-4xl">{contractTypes.find(t => t.id === contractType)?.icon}</span>
+                        <div>
+                          <p className="text-white font-bold text-lg">{contractTypes.find(t => t.id === contractType)?.name}</p>
+                          <p className="text-gray-400 text-sm">Based on filename analysis</p>
+                        </div>
+                      </div>
+                      <p className="text-gray-300 text-sm mb-4">💡 You can manually override this by selecting a different type below</p>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {contractTypes.map(type => (
+                          <button
+                            key={type.id}
+                            onClick={() => setContractType(type.id)}
+                            className={`p-3 rounded-lg border-2 transition-all font-semibold text-sm ${
+                              contractType === type.id
+                                ? 'border-purple-500 bg-purple-900 text-white'
+                                : 'border-gray-600 bg-gray-800 text-gray-300 hover:border-gray-500'
+                            }`}
+                          >
+                            {type.icon} {type.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Start Button */}
+                <button
+                  onClick={startTranslation}
+                  disabled={!contractFile}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
+                >
+                  {contractFile ? '🚀 Start 6-Phase Translation' : '⬆️ Upload a PDF to Begin'}
+                </button>
+              </div>
+            )}
+
+            {/* Phases 1-5: Process Display */}
+            {phase > 0 && phase < 6 && (
+              <div className="bg-gray-800 rounded-2xl p-8 mb-8 border border-gray-700">
+                <StepIndicator 
+                  current={phase} 
+                  total={6} 
+                  labels={phaseDescriptions.map(p => p.title.split(':')[1].trim())}
+                />
+
+                {/* Current Phase Animation */}
+                <div className={`bg-gradient-to-r ${phaseDescriptions[phase - 1].color} rounded-xl p-8 text-center mb-6`}>
+                  <div className="text-6xl mb-4">{phaseDescriptions[phase - 1].icon}</div>
+                  <h3 className="text-2xl font-bold text-white">{phaseDescriptions[phase - 1].title}</h3>
+                </div>
+
+                {/* Phase Status */}
+                {currentPhaseInfo.title && (
+                  <div className="bg-gray-700 rounded-lg p-6 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-semibold text-white">{currentPhaseInfo.title}</h4>
+                      <span className="text-green-400 font-bold">{currentPhaseInfo.status}</span>
+                    </div>
+                    <p className="text-gray-300 mb-4">{currentPhaseInfo.output}</p>
+                    <div className="w-full bg-gray-600 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
+                        style={{ width: `${currentPhaseInfo.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Generated Code Preview */}
+                {phase === 3 && generatedData.solidity && (
+                  <div className="bg-gray-700 rounded-lg p-4 mb-6">
+                    <h4 className="text-white font-semibold mb-2">📄 Solidity Contract Preview</h4>
+                    <textarea
+                      value={generatedData.solidity}
+                      readOnly
+                      className="w-full h-64 p-3 bg-gray-900 text-green-400 font-mono text-xs rounded border border-gray-600"
+                    />
+                  </div>
+                )}
+
+                {phase === 5 && generatedData.abi && (
+                  <div className="bg-gray-700 rounded-lg p-4 mb-6">
+                    <h4 className="text-white font-semibold mb-2">📋 ABI Preview</h4>
+                    <textarea
+                      value={generatedData.abi}
+                      readOnly
+                      className="w-full h-48 p-3 bg-gray-900 text-cyan-400 font-mono text-xs rounded border border-gray-600 overflow-auto"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Post-Generation: Automated Deployment Phase */}
+            {phase === 6 && (
+              <>
+                {console.log('📊 Rendering Phase 6 UI - Automated Deployment')}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Side: Deployment Status & Action */}
+                  <div className="space-y-6">
+                  {/* Auto-Deployment Status */}
+                  <div className="bg-gradient-to-br from-blue-900 to-purple-900 rounded-2xl p-8 border-2 border-blue-500">
+                    <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                      🚀 Automated Deployment
+                    </h3>
+
+                    {deploymentStep === 0 && !deploymentLoading && (
+                      <div className="space-y-4">
+                        <p className="text-gray-300 mb-6">
+                          Your smart contract has been successfully generated! We can now automatically deploy it to a local Ganache network and set up your MCP server.
+                        </p>
+                        <button
+                          onClick={handleAutoDeploy}
+                          disabled={deploymentLoading}
+                          className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold rounded-lg transition-all text-lg"
+                        >
+                          {deploymentLoading ? '⏳ Deploying...' : '✅ Auto-Deploy Contract'}
+                        </button>
+                        <p className="text-xs text-gray-400 text-center">
+                          💡 Requires Ganache running on http://127.0.0.1:7545
+                        </p>
+                      </div>
+                    )}
+
+                    {deploymentStep === 1 && deploymentLoading && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 animate-pulse">
+                          <div className="w-4 h-4 bg-yellow-500 rounded-full animate-bounce"></div>
+                          <span className="text-yellow-300 font-semibold">Deploying contract to testnet...</span>
+                        </div>
+                        <div className="bg-gray-900 rounded-lg p-4 border border-yellow-600">
+                          <p className="text-sm text-gray-300">
+                            ⏳ This may take 30-60 seconds. The contract is being compiled and deployed to your local Ganache instance.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {deploymentStep >= 2 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">✅</span>
+                          <span className="text-green-300 font-semibold">Contract Deployed!</span>
+                        </div>
+                        
+                        <div className="bg-gray-900 rounded-lg p-4 border border-green-600 space-y-2">
+                          <div>
+                            <p className="text-xs text-gray-400">Contract Address:</p>
+                            <p className="text-sm text-green-300 font-mono break-all">{contractAddress}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400">RPC URL:</p>
+                            <p className="text-sm text-green-300 font-mono">{rpcUrl}</p>
+                          </div>
+                        </div>
+
+                        {deploymentStep === 2 && (
+                          <div className="flex items-center gap-3 animate-pulse mt-4">
+                            <div className="w-4 h-4 bg-blue-500 rounded-full animate-bounce"></div>
+                            <span className="text-blue-300 font-semibold">Launching MCP Server...</span>
+                          </div>
+                        )}
+
+                        {deploymentStep === 3 && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">✅</span>
+                            <span className="text-green-300 font-semibold">MCP Server Connected!</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {deploymentError && (
+                      <div className="bg-red-900 border border-red-600 rounded-lg p-4">
+                        <p className="text-red-300 text-sm mb-3">❌ Deployment Error:</p>
+                        <p className="text-gray-300 text-xs font-mono break-words mb-3">{deploymentError}</p>
+                        <button
+                          onClick={handleAutoDeploy}
+                          className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold transition-all"
+                        >
+                          🔄 Retry Deployment
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Download Artifacts */}
+                  <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                      {icons.file()}
+                      Download Generated Files
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <button
+                        onClick={() => downloadFile(generatedData.solidity, `${contractType}_contract.sol`)}
+                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-semibold transition-all"
+                      >
+                        📥 .sol File
+                      </button>
+                      <button
+                        onClick={() => downloadFile(generatedData.abi, `${contractType}_contract.abi.json`)}
+                        className="w-full px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-sm font-semibold transition-all"
+                      >
+                        📥 ABI File
+                      </button>
+                      <button
+                        onClick={() => downloadFile(generatedData.mcp, `${contractType}_mcp_server.py`)}
+                        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-semibold transition-all"
+                      >
+                        📥 MCP Server
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Side: Chatbot */}
+                <div className="bg-gray-800 rounded-2xl p-8 border border-cyan-700 border-2 h-fit flex flex-col">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    {icons.chat()}
+                    Smart Contract Chatbot
+                  </h3>
+
+                {!mcpServerRunning ? (
+                    <div className="text-center py-12">
+                      <div className="text-4xl mb-4">🤖</div>
+                      {deploymentStep < 2 ? (
+                        <>
+                          <p className="text-gray-400">Complete contract translation first</p>
+                          <p className="text-xs text-gray-500 mt-2">Then deploy the contract to activate the chatbot</p>
+                        </>
+                      ) : deploymentStep === 2 ? (
+                        <>
+                          <p className="text-gray-400">Launching MCP server...</p>
+                          <div className="flex justify-center mt-4">
+                            <div className="flex gap-2">
+                              <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce"></div>
+                              <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                              <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-gray-400">Waiting for MCP connection...</p>
+                          <p className="text-xs text-yellow-400 mt-4">Auto-connecting to chatbot...</p>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Chat Messages */}
+                      <div className="flex-1 bg-gray-900 rounded-lg p-4 mb-4 h-96 overflow-y-auto border border-gray-700">
+                        {chatMessages.map((msg, idx) => (
+                          <div
+                            key={idx}
+                            className={`mb-3 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
+                          >
+                            <div
+                              className={`inline-block max-w-xs px-4 py-2 rounded-lg ${
+                                msg.role === 'user'
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-gray-700 text-cyan-300'
+                              }`}
+                            >
+                              <p className="text-sm">{msg.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {chatLoading && (
+                          <div className="text-left">
+                            <div className="inline-block px-4 py-2 bg-gray-700 text-gray-400 rounded-lg text-sm">
+                              <div className="flex gap-2">
+                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
+                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Chat Input */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleChatMessage()}
+                          placeholder="Ask to call functions..."
+                          className="flex-1 px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-cyan-500 text-sm"
+                          disabled={chatLoading}
+                        />
+                        <button
+                          onClick={handleChatMessage}
+                          disabled={chatLoading || !chatInput.trim()}
+                          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 text-white rounded font-semibold transition-all"
+                        >
+                          Send
+                        </button>
+                      </div>
+
+                      {/* Quick Actions */}
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                        <button
+                          onClick={() => {
+                            const msg = "Make a payment";
+                            setChatInput(msg);
+                          }}
+                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
+                        >
+                          💳 Make Payment
+                        </button>
+                        <button
+                          onClick={() => {
+                            const msg = "What's the status?";
+                            setChatInput(msg);
+                          }}
+                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
+                        >
+                          📊 Check Status
+                        </button>
+                        <button
+                          onClick={() => {
+                            const msg = "Confirm delivery or completion";
+                            setChatInput(msg);
+                          }}
+                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
+                        >
+                          ✓ Confirm Action
+                        </button>
+                        <button
+                          onClick={() => {
+                            const msg = "Get my balance";
+                            setChatInput(msg);
+                          }}
+                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
+                        >
+                          💰 Get Balance
+                        </button>
+                      </div>
+
+                      {/* MCP Status */}
+                      <div className="mt-4 p-3 bg-green-900 border border-green-600 rounded-lg text-sm text-green-300">
+                        <p>✓ MCP Server Running</p>
+                        <p className="text-xs text-green-400">Connected to contract at: {contractAddress.slice(0, 10)}...</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              </>
+            )}
+
+            {/* How It Works Section */}
+            {phase === 0 && (
+              <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 mt-8">
+                <h2 className="text-2xl font-bold text-white mb-6">📚 How It Works</h2>
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="text-lg font-bold text-purple-400 mb-4">6-Phase Translation Process</h3>
+                    <ol className="space-y-3 text-gray-300 text-sm">
+                      <li><strong>Phase 1:</strong> Document Processing - Extract text from PDF</li>
+                      <li><strong>Phase 2:</strong> Contract Analysis - Parse parties, terms, conditions</li>
+                      <li><strong>Phase 3:</strong> Code Generation - Generate Solidity smart contract</li>
+                      <li><strong>Phase 4:</strong> Security Audit - Identify vulnerabilities</li>
+                      <li><strong>Phase 5:</strong> ABI Generation - Create contract interface</li>
+                      <li><strong>Phase 6:</strong> MCP Server - Generate FastMCP server</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-cyan-400 mb-4">Automated Deployment & Testing</h3>
+                    <ol className="space-y-3 text-gray-300 text-sm">
+                      <li>✅ <strong>One-Click Deployment:</strong> Auto-deploy to Ganache testnet</li>
+                      <li>✅ <strong>Auto Configuration:</strong> Contract address & RPC URL retrieved</li>
+                      <li>✅ <strong>MCP Server Launch:</strong> Automatically started and connected</li>
+                      <li>✅ <strong>Live Chatbot:</strong> Ask questions about your contract</li>
+                      <li>✅ <strong>Smart Execution:</strong> AI automatically calls contract functions</li>
+                      <li>✅ <strong>Download Artifacts:</strong> .sol, ABI, and MCP server available</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Security Audit Approval Modal */}
+            {showAuditModal && auditData && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-gray-800 rounded-2xl max-w-2xl w-full max-h-96 overflow-y-auto border-2 border-yellow-500 shadow-2xl">
+                  {/* Modal Header */}
+                  <div className="bg-gradient-to-r from-yellow-600 to-orange-600 p-6 border-b border-yellow-500">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                      🔐 Security Audit Review Required
+                    </h2>
+                    <p className="text-yellow-100 text-sm mt-2">The security audit found issues that need your review</p>
+                  </div>
+
+                  {/* Modal Content */}
+                  <div className="p-6 space-y-4">
+                    {/* Severity Badge */}
+                    <div className="flex items-center gap-3">
+                      <span className={`px-4 py-2 rounded-lg font-bold text-white ${
+                        auditData.severity_level === 'critical' ? 'bg-red-600' :
+                        auditData.severity_level === 'high' ? 'bg-orange-600' :
+                        auditData.severity_level === 'medium' ? 'bg-yellow-600' :
+                        'bg-blue-600'
+                      }`}>
+                        Severity: {auditData.severity_level?.toUpperCase()}
+                      </span>
+                      <span className="text-gray-300">
+                        Security Score: <span className="font-bold text-lg">{auditData.security_score}</span>
+                      </span>
+                    </div>
+
+                    {/* Issues Found */}
+                    {auditData.issues && auditData.issues.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-bold text-red-400 mb-3">🚨 Issues Found ({auditData.issues.length})</h3>
+                        <div className="space-y-2 bg-gray-900 p-4 rounded-lg border border-red-900 max-h-40 overflow-y-auto">
+                          {auditData.issues.map((issue, idx) => (
+                            <div key={idx} className="text-gray-300 text-sm flex gap-2">
+                              <span className="text-red-400 flex-shrink-0">•</span>
+                              <span>{issue}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {auditData.recommendations && auditData.recommendations.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-bold text-blue-400 mb-3">💡 Recommendations</h3>
+                        <div className="space-y-2 bg-gray-900 p-4 rounded-lg border border-blue-900 max-h-40 overflow-y-auto">
+                          {auditData.recommendations.map((rec, idx) => (
+                            <div key={idx} className="text-gray-300 text-sm flex gap-2">
+                              <span className="text-blue-400 flex-shrink-0">→</span>
+                              <span>{rec}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Vulnerability Count */}
+                    {auditData.vulnerability_count !== undefined && (
+                      <div className="text-gray-300 text-sm">
+                        Total Vulnerabilities: <span className="font-bold text-yellow-400">{auditData.vulnerability_count}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Modal Footer - Action Buttons */}
+                  <div className="bg-gray-700 p-6 border-t border-gray-600 flex gap-4 justify-end">
+                    <button
+                      onClick={() => handleAuditApproval(false)}
+                      className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-all"
+                    >
+                      ❌ Reject & Cancel
+                    </button>
+                    <button
+                      onClick={() => handleAuditApproval(true)}
+                      className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-all"
+                    >
+                      ✅ Approve & Continue
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<ContractTranslatorDemo />);
+  </script>
+</body>
+</html>
