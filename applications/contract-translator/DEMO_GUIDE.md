@@ -1,14 +1,17 @@
-# IBM Agentics Contract Translator - Complete Demo Guide
+# IBM Agentics Contract Translator - Research & Evaluation Guide
 
 ## 📋 Overview
 
-The `demo.html` file provides a complete end-to-end demonstration of the IBM Agentics smart contract translation and deployment workflow. It integrates:
+> **Research Focus**: This application demonstrates a 6-phase semantic translation pipeline for converting natural language contracts into Solidity smart contracts. The focus is on evaluating the quality and accuracy of AI-generated smart contracts for research purposes.
+
+The system integrates:
 
 1. **6-Phase Contract Translation** - Automated AI-powered contract to Solidity conversion
-2. **Remix IDE Integration** - Manual deployment step using Remix
-3. **Local Environment Configuration** - Setting up `.env` files per contract
-4. **MCP Server Deployment** - Automatic FastMCP server startup
-5. **AI Chatbot Interface** - Natural language interaction with deployed contracts
+2. **Security Analysis** - Automated security audit of generated code
+3. **Code Quality Assessment** - Output files for analysis and evaluation
+4. **MCP Server Generation** - FastMCP server templates for potential deployment
+
+**Note**: Automatic deployment features have been removed to focus on contract generation quality research. Generated contracts can be manually deployed for testing if needed.
 
 ## 🎯 How It Works (Complete Workflow)
 
@@ -23,81 +26,68 @@ The `demo.html` file provides a complete end-to-end demonstration of the IBM Age
 - **Input**: PDF or text document containing natural language contract
 - **Process**: Extracts contract text and metadata
 - **Output**: Raw contract text (1,000+ characters typically)
-- **Time**: ~2 seconds simulation
+- **Research Value**: Evaluate text extraction accuracy
 
 #### Phase 2: Contract Analysis 🔍
 - **Input**: Extracted contract text
 - **Process**: IBM Agentics parses parties, financial terms, conditions
 - **Output**: Structured contract schema (parties, amount, dates, etc.)
-- **Time**: ~2 seconds simulation
+- **Research Value**: Assess semantic understanding and schema extraction accuracy
 
 #### Phase 3: Code Generation ⚙️
 - **Input**: Contract schema from Phase 2
 - **Process**: LLM (gpt-4o-mini) generates Solidity smart contract
 - **Output**: Complete, compilable Solidity code (~100-200 lines)
-- **Time**: ~2 seconds simulation
 - **Features**: Functions, events, modifiers, state variables
+- **Research Value**: Evaluate code quality, completeness, and idiomatic patterns
 
 #### Phase 4: Security Audit 🔐
 - **Input**: Generated Solidity contract
 - **Process**: Analyzes for vulnerabilities (reentrancy, state issues, etc.)
 - **Output**: Security report with severity level (Low/Medium/High)
-- **Time**: ~2 seconds simulation
-- **Action**: Allows user to review risks before proceeding
+- **Research Value**: Measure security awareness in generated code
 
 #### Phase 5: ABI Generation 📋
 - **Input**: Solidity contract code
 - **Process**: Extracts Application Binary Interface (ABI)
 - **Output**: JSON ABI file with function signatures and types
-- **Time**: ~2 seconds simulation
-- **Used By**: MCP server for function calls, Remix for deployment
+- **Research Value**: Verify function interface consistency
 
 #### Phase 6: MCP Server Generation 🤖
 - **Input**: ABI and contract schema
-- **Process**: Generates FastMCP Python server with tools for each function
+- **Process**: Generates FastMCP Python server template with tools for each function
 - **Output**: Standalone Python MCP server script
-- **Time**: ~2 seconds simulation
 - **Features**: 
-  - Loads local `.env` file (RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS)
-  - Loads ABI from `.abi.json` file
-  - Creates @mcp.tool() decorated functions for each contract function
+  - Template for loading configuration
+  - @mcp.tool() decorated functions for each contract function
   - Handles payable, non-payable, and view functions
-  - Error handling and transaction signing
+  - Error handling and transaction patterns
+- **Research Value**: Evaluate API generation quality
 
-### Post-Generation: Deployment Phase
+### Output Files for Research
+
+After the 6-phase pipeline completes, the following files are generated:
+
+1. **[ContractName].sol** - Solidity source code
+   - Use for: Code quality analysis, security review, compilation testing
+
+2. **[ContractName].abi.json** - Contract ABI
+   - Use for: Interface analysis, deployment testing
+
+3. **security_audit.json** - Security analysis report
+   - Use for: Security pattern evaluation, vulnerability assessment
+
+4. **contract_schema.json** - Parsed contract data
+   - Use for: Semantic accuracy evaluation
+
+5. **[ContractName]_mcp_server.py** - MCP server template
+   - Use for: API design evaluation (optional deployment for testing)
+
+### Optional: Manual Testing & Deployment
+
+If you wish to test the generated contracts on a blockchain:
 
 #### Step 1: Manual Deployment via Remix 🔗
-
-**Why Manual?**
-- Cannot deploy directly from browser to Ganache without backend
-- Remix provides safe, user-controlled deployment environment
-- Lets you verify code and customize constructor parameters
-
-**Steps:**
-1. Click "Download .sol File" button
-2. Go to [remix.ethereum.org](https://remix.ethereum.org)
-3. Create new file (e.g., `SalesAgreement.sol`)
-4. Paste downloaded Solidity code
-5. Compile code (Compiler → Compile)
-6. Deploy contract:
-   - Go to "Deploy & Run Transactions" tab
-   - Select environment: **"Hardhat Provider"** or **"Injected Web3"** (MetaMask)
-   - For Ganache, use Hardhat with `http://127.0.0.1:7545` RPC endpoint
-   - Click "Deploy"
-7. Copy deployed contract address from deployment receipt
-
-#### Step 2: Configure Environment Variables
-
-**What Each Variable Does:**
-
-1. **RPC_URL** (e.g., `http://127.0.0.1:7545`)
-   - Connection endpoint to blockchain node
-   - Default: Ganache on port 7545
-   - Alternative: Ethereum testnet (Sepolia), mainnet, or other networks
-   - Used by Web3.py to read blockchain state and send transactions
-
-2. **Contract Address** (e.g., `0x1a2b3c...`)
-   - Address where contract was deployed
    - From Remix deployment receipt
    - Used to identify which contract instance to interact with
    - Should be in checksum format (mixed case) or checksummed by Web3.py

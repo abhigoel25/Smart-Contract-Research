@@ -1,6 +1,8 @@
-# Complete Demo Architecture Explanation
+# Smart Contract Generation Pipeline Architecture
 
 ## 📐 System Architecture Overview
+
+> **Note**: This architecture focuses on the 6-phase semantic translation pipeline for research and quality evaluation of AI-generated smart contracts. Automatic deployment features have been removed to focus on contract generation quality assessment.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -8,96 +10,34 @@
 │                      (demo.html - React)                        │
 │                                                                  │
 │  ┌──────────────────┐  ┌───────────────┐  ┌──────────────────┐│
-│  │ Phase 0          │  │ Phases 1-6    │  │ Deployment &     ││
-│  │ Selection        │→ │ Visualization │→ │ Chatbot          ││
+│  │ Phase 0          │  │ Phases 1-6    │  │ Output Files     ││
+│  │ Selection        │→ │ Visualization │→ │ & Downloads      ││
 │  │                  │  │               │  │                  ││
-│  │ • Contract Type  │  │ • Progress    │  │ • Config Form    ││
-│  │ • Start Button   │  │ • Code Preview│  │ • Chatbot UI     ││
-│  │                  │  │ • Downloads   │  │ • MCP Status     ││
+│  │ • Contract Type  │  │ • Progress    │  │ • Solidity Code  ││
+│  │ • Start Button   │  │ • Code Preview│  │ • ABI JSON       ││
+│  │                  │  │ • Downloads   │  │ • Security Audit ││
 │  └──────────────────┘  └───────────────┘  └──────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
                              ↓
-                    (downloads files)
+                    (downloads files for analysis)
                              ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │               LOCAL FILESYSTEM                                   │
-│               (User's machine)                                   │
+│               (Generated Outputs for Research)                   │
 │                                                                  │
-│  Download Folder:                                               │
+│  Output Folder:                                                 │
 │  ├── sales_contract.sol          ← Solidity source             │
 │  ├── sales_contract.abi.json     ← Function interface          │
-│  └── sales_mcp_server.py         ← MCP server                  │
+│  ├── security_audit.json         ← Security analysis           │
+│  ├── contract_schema.json        ← Parsed contract data        │
+│  └── sales_mcp_server.py         ← MCP server template         │
 │                                                                  │
-│  Contract Directory:                                            │
-│  ├── contract.sol                                               │
-│  ├── contract.abi.json                                          │
-│  ├── mcp_server.py                                              │
-│  └── .env                        ← Configuration (USER FILLS) │
-│      ├── RPC_URL=http://...                                    │
-│      ├── CONTRACT_ADDRESS=0x...                                │
-│      └── PRIVATE_KEY=...                                       │
+│  Purpose: Research & Quality Evaluation                         │
+│  • Analyze code quality                                         │
+│  • Compare across contract types                                │
+│  • Evaluate semantic accuracy                                   │
+│  • Assess security patterns                                     │
 └─────────────────────────────────────────────────────────────────┘
-                             ↓
-                  (user deployment & config)
-                             ↓
-┌─────────────────────────────────────────────────────────────────┐
-│               REMIX IDE (remix.ethereum.org)                    │
-│                                                                  │
-│  • Paste .sol file                                              │
-│  • Compile                                                      │
-│  • Deploy to Ganache                                            │
-│  • Get deployed address → Update .env                           │
-└─────────────────────────────────────────────────────────────────┘
-                             ↓
-┌─────────────────────────────────────────────────────────────────┐
-│               BLOCKCHAIN (Ganache - Local)                      │
-│                                                                  │
-│  • Contract deployed at address: 0x5C18C93C...                 │
-│  • Account balances                                             │
-│  • Transaction history                                          │
-│  • Contract state variables                                     │
-└─────────────────────────────────────────────────────────────────┘
-                             ↑
-                   (read/write via RPC)
-                             ↑
-┌─────────────────────────────────────────────────────────────────┐
-│          MCP SERVER (Python - mcp_server.py)                    │
-│                                                                  │
-│  On startup:                                                    │
-│  1. Load local .env file → RPC_URL, PRIVATE_KEY, ADDRESS      │
-│  2. Load ABI from .abi.json                                    │
-│  3. Connect to Ganache via RPC_URL                             │
-│  4. Create Web3.py contract instance                           │
-│  5. Register each ABI function as @mcp.tool()                  │
-│  6. Listen on stdio for commands                               │
-│                                                                  │
-│  Each tool:                                                     │
-│  • Builds Web3.py transaction                                  │
-│  • Signs with private key                                      │
-│  • Sends to Ganache                                            │
-│  • Returns tx_hash or result                                   │
-└─────────────────────────────────────────────────────────────────┘
-           ↑                                      ↓
-        stdio                                  stdio
-           ↑                                      ↓
-┌─────────────────────────────────────────────────────────────────┐
-│            CHATBOT (JavaScript - demo.html)                     │
-│                                                                  │
-│  User Input: "Make a payment"                                   │
-│         ↓                                                        │
-│  Natural Language Processing                                    │
-│         ↓                                                        │
-│  Determine function: makePayment()                              │
-│         ↓                                                        │
-│  Send MCP tool call via stdio                                   │
-│         ↓                                                        │
-│  Receive result: {tx_hash: "0x..."}                            │
-│         ↓                                                        │
-│  Display in chat: "✓ Transaction: 0x..."                       │
-│         ↓                                                        │
-│  Update UI & chat history                                       │
-└─────────────────────────────────────────────────────────────────┘
-```
 
 ---
 

@@ -69,168 +69,6 @@
       const [auditData, setAuditData] = useState(null);
       const [currentSessionId, setCurrentSessionId] = useState(null);
 
-      // Deployment state
-      const [deploymentStep, setDeploymentStep] = useState(0); // 0: Pre-deploy, 1: Deploying, 2: Deployed, 3: MCP Running
-      const [contractAddress, setContractAddress] = useState('');
-      const [privateKey, setPrivateKey] = useState('');
-      const [rpcUrl, setRpcUrl] = useState('http://127.0.0.1:7545');
-      const [mcpServerRunning, setMcpServerRunning] = useState(false);
-      const [deploymentLoading, setDeploymentLoading] = useState(false);
-      const [deploymentError, setDeploymentError] = useState(null);
-
-      // Chatbot state
-      const [chatMessages, setChatMessages] = useState([
-        { role: 'assistant', content: '🤖 Initializing chatbot...' }
-      ]);
-      const [chatInput, setChatInput] = useState('');
-      const [chatLoading, setChatLoading] = useState(false);
-      const [apiConnected, setApiConnected] = useState(false);
-      const [apiConnecting, setApiConnecting] = useState(true);
-
-      // Auto-connect to API on mount
-      useEffect(() => {
-        const checkApi = async () => {
-          try {
-            const response = await fetch('http://localhost:5000/api/health');
-            if (response.ok) {
-              setApiConnected(true);
-              setChatMessages([
-                { role: 'assistant', content: '✅ Chatbot API connected!\n\nOnce you deploy your contract and configure the MCP server, you can interact with it using natural language.' }
-              ]);
-              setApiConnecting(false);
-            }
-          } catch (error) {
-            // API not available yet
-            setApiConnecting(false);
-            setChatMessages([
-              { role: 'assistant', content: '⏳ Waiting for chatbot API to initialize...\n\nIf this persists, try:\npython mcp/chatbot_api.py' }
-            ]);
-          }
-        };
-
-        // Try to connect immediately
-        checkApi();
-        
-        // Retry every 3 seconds
-        const interval = setInterval(checkApi, 3000);
-        
-        return () => clearInterval(interval);
-      }, []);
-
-      // Auto-trigger deployment after Phase 6 completes
-      const autoDeployTriggered = useRef(false);
-      
-      useEffect(() => {
-        // Debug: Log every time this effect runs
-        console.log('🔍 Auto-deploy useEffect check:', {
-          phase,
-          deploymentStep,
-          hasSolidity: !!generatedData.solidity,
-          deploymentLoading,
-          alreadyTriggered: autoDeployTriggered.current,
-          solidityLength: generatedData.solidity?.length || 0
-        });
-
-        // Trigger auto-deployment when:
-        // 1. All 6 phases complete (phase === 6)
-        // 2. We're in the ready state (deploymentStep === 0)
-        // 3. We have solidity code ready
-        if (phase === 6 && deploymentStep === 0 && generatedData.solidity && !deploymentLoading && !autoDeployTriggered.current) {
-          console.log('✅ Phase 6 complete - Preparing auto-deployment...');
-          autoDeployTriggered.current = true;
-          
-          // Schedule the deployment to happen after brief delay
-          const timer = setTimeout(async () => {
-            console.log('🚀 Executing auto-deployment...');
-            setDeploymentLoading(true);
-            setDeploymentError(null);
-            setDeploymentStep(1);
-            
-            try {
-              console.log('📝 Collected data for deployment:');
-              console.log('   Solidity code length:', generatedData.solidity?.length || 0);
-              console.log('   ABI available:', !!generatedData.abi);
-              console.log('   Schema available:', !!generatedData.schema);
-              if (generatedData.schema) {
-                console.log('   Schema details:', {
-                  contract_type: generatedData.schema.contract_type,
-                  parties: generatedData.schema.parties?.length || 0,
-                  terms: generatedData.schema.financial_terms?.length || 0
-                });
-              }
-              
-              if (!generatedData.solidity) {
-                throw new Error('No Solidity code available. Please complete all 6 translation phases first.');
-              }
-              
-              // Parse ABI if it's a string
-              let abiForDeploy = [];
-              if (generatedData.abi) {
-                try {
-                  abiForDeploy = typeof generatedData.abi === 'string' 
-                    ? JSON.parse(generatedData.abi) 
-                    : generatedData.abi;
-                } catch (e) {
-                  console.warn('Could not parse ABI, proceeding without it');
-                  abiForDeploy = [];
-                }
-              }
-              
-              console.log('📝 Calling /api/auto-deploy endpoint...');
-              const deploymentPayload = {
-                solidity: generatedData.solidity,
-                contract_name: contractType,
-                abi: abiForDeploy,
-                schema: generatedData.schema || {}
-              };
-              console.log('   Payload schema type:', typeof deploymentPayload.schema);
-              console.log('   Payload schema keys:', Object.keys(deploymentPayload.schema).slice(0, 5));
-              
-              const response = await fetch('http://localhost:5000/api/auto-deploy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(deploymentPayload)
-              });
-
-              const result = await response.json();
-              
-              if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Deployment failed');
-              }
-
-              console.log('✅ Deployment successful!', result);
-              
-              // Update with deployment details
-              setContractAddress(result.contract_address);
-              setPrivateKey(result.private_key);
-              setRpcUrl(result.rpc_url);
-              setDeploymentStep(2);
-
-              // Show deployment success
-              setChatMessages([
-                { role: 'assistant', content: `✅ Contract Deployed!\n\n📍 Address: ${result.contract_address}\n🌐 Network: ${result.rpc_url}\n\n✓ Ready for interaction` }
-              ]);
-
-              // Call auto-connect in separate function
-              await autoConnectMCP(result);
-
-            } catch (error) {
-              console.error('❌ Auto-deployment error:', error);
-              setDeploymentError(error.message);
-              setDeploymentStep(0);
-              autoDeployTriggered.current = false; // Allow retry
-              setChatMessages([
-                { role: 'assistant', content: `❌ Deployment failed: ${error.message}\n\n💡 Troubleshooting:\n1. Make sure Ganache is running on http://127.0.0.1:7545\n2. Check the terminal for detailed error logs\n3. Ensure you have web3 and py-solc-x installed: pip install web3 py-solc-x` }
-              ]);
-            } finally {
-              setDeploymentLoading(false);
-            }
-          }, 500);
-          
-          return () => clearTimeout(timer);
-        }
-      }, [phase, deploymentStep, generatedData.solidity, deploymentLoading]);
-
       // Sample contract types
       const contractTypes = [
         { id: 'sales', name: 'Sales Agreement', icon: '🛒' },
@@ -395,7 +233,6 @@
           }
 
           console.log('🟢 All phases completed successfully!');
-          setDeploymentStep(0);
 
         } catch (error) {
           console.error('❌ Translation error caught:', error);
@@ -405,9 +242,6 @@
           setPhase(0);
           const errorMessage = error.message || 'Unknown error occurred';
           alert(`Translation failed: ${errorMessage}`);
-          setChatMessages([
-            { role: 'assistant', content: `❌ Error: ${errorMessage}\n\n💡 Troubleshooting:\n1. Check that chatbot_api.py is running on port 5000\n2. Check the terminal for detailed error messages\n3. Make sure your OPENAI_API_KEY is set in .env\n\n📋 Check browser console for more details` }
-          ]);
         }
       };
 
@@ -439,168 +273,12 @@
               status: '✓ Approved',
               output: 'Continuing with translation...'
             }));
-          } else {
-            setPhase(0);
-            alert('Security audit rejected. Translation cancelled.');
           }
         } catch (error) {
-          console.error('❌ Error sending approval:', error);
-          alert('Failed to send approval: ' + error.message);
+          console.error('Approval error:', error);
         }
       };
 
-      // Auto-deploy contract to testnet
-      const handleAutoDeploy = async () => {
-        console.log('🚀 Starting automated contract deployment...');
-        setDeploymentLoading(true);
-        setDeploymentError(null);
-        setDeploymentStep(1);
-        
-        try {
-          console.log('📝 Collected data for deployment:');
-          console.log('   Solidity code length:', generatedData.solidity?.length || 0);
-          console.log('   ABI available:', !!generatedData.abi);
-          
-          if (!generatedData.solidity) {
-            throw new Error('No Solidity code available. Please complete all 6 translation phases first.');
-          }
-          
-          // Parse ABI if it's a string
-          let abiForDeploy = [];
-          if (generatedData.abi) {
-            try {
-              abiForDeploy = typeof generatedData.abi === 'string' 
-                ? JSON.parse(generatedData.abi) 
-                : generatedData.abi;
-            } catch (e) {
-              console.warn('Could not parse ABI, proceeding without it');
-              abiForDeploy = [];
-            }
-          }
-          
-          console.log('📝 Calling /api/auto-deploy endpoint...');
-          const response = await fetch('http://localhost:5000/api/auto-deploy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              solidity: generatedData.solidity,
-              contract_name: contractType,
-              abi: abiForDeploy,
-              schema: {}
-            })
-          });
-
-          const result = await response.json();
-          
-          if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Deployment failed');
-          }
-
-          console.log('✅ Deployment successful!', result);
-          
-          // Update with deployment details
-          setContractAddress(result.contract_address);
-          setPrivateKey(result.private_key);
-          setRpcUrl(result.rpc_url);
-          setDeploymentStep(2);
-
-          // Show deployment success
-          setChatMessages([
-            { role: 'assistant', content: `✅ Contract Deployed!\n\n📍 Address: ${result.contract_address}\n🌐 Network: ${result.rpc_url}\n\n🚀 Launching MCP Server...` }
-          ]);
-
-          // Now auto-connect to MCP server
-          console.log('🤖 Auto-connecting to MCP server...');
-          await autoConnectMCP(result);
-
-        } catch (error) {
-          console.error('❌ Auto-deployment error:', error);
-          setDeploymentError(error.message);
-          setDeploymentStep(0);
-          setChatMessages([
-            { role: 'assistant', content: `❌ Deployment failed: ${error.message}\n\n💡 Troubleshooting:\n1. Make sure Ganache is running on http://127.0.0.1:7545\n2. Check the terminal for detailed error logs\n3. Ensure you have web3 and py-solc-x installed: pip install web3 py-solc-x` }
-          ]);
-        } finally {
-          setDeploymentLoading(false);
-        }
-      };
-
-      // Auto-connect to MCP server
-      const autoConnectMCP = async (deploymentResult) => {
-        try {
-          console.log('⏳ Connecting to MCP server...');
-          
-          // Use MCP server path if available, otherwise use env file
-          const mcpPath = deploymentResult.mcp_server_path || deploymentResult.env_file;
-          
-          if (!mcpPath) {
-            console.warn('No MCP path available');
-            setMcpServerRunning(false);
-            setDeploymentStep(3);
-            setChatMessages([
-              { role: 'assistant', content: `✅ Contract deployment successful!\n\n📍 Address: ${deploymentResult.contract_address}\n\n⚠️ Note: MCP server not available. Contract is deployed but interactive tools aren't ready.` }
-            ]);
-            return;
-          }
-          
-          // Try to connect to MCP
-          const connectResponse = await fetch('http://localhost:5000/api/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mcp_path: mcpPath,
-              contract_type: contractType,
-              contract_address: deploymentResult.contract_address,
-              abi: generatedData.abi ? JSON.parse(generatedData.abi) : []
-            })
-          });
-
-          if (!connectResponse.ok) {
-            throw new Error(`Connect failed: HTTP ${connectResponse.status}`);
-          }
-
-          const connectResult = await connectResponse.json();
-          
-          if (connectResult.status === 'connected' || connectResult.status === 'already_connected') {
-            console.log('✅ MCP Server connected!', connectResult.tools);
-            setMcpServerRunning(true);
-            setDeploymentStep(3);
-            
-            const toolCount = connectResult.count || connectResult.tools?.length || 0;
-            const toolList = connectResult.tools && connectResult.tools.length > 0 
-              ? `\n\nAvailable tools: ${connectResult.tools.join(', ')}`
-              : '';
-            
-            setChatMessages([
-              { role: 'assistant', content: `✅ Deployment Complete!\n\n🎉 Your smart contract is deployed and ready to use.${toolList}\n\n💬 You can now interact with your contract by asking natural language questions like:\n• "What's the contract status?"\n• "Call the pay function"\n• "Show contract details"\n\nTry asking me something!` }
-            ]);
-          } else if (connectResult.status === 'deployed_only') {
-            // Contract deployed but MCP not available
-            setMcpServerRunning(false);
-            setDeploymentStep(3);
-            setChatMessages([
-              { role: 'assistant', content: `✅ Contract deployment successful!\n\n📍 Address: ${deploymentResult.contract_address}\n🌐 Network: ${deploymentResult.rpc_url}\n\n✓ Your contract is deployed and ready. Interactive tools will be available soon.` }
-            ]);
-          } else {
-            // Fallback
-            setMcpServerRunning(false);
-            setDeploymentStep(3);
-            setChatMessages([
-              { role: 'assistant', content: `✅ Contract deployment complete!\n\n📍 Address: ${deploymentResult.contract_address}\n🌐 Network: ${deploymentResult.rpc_url}` }
-            ]);
-          }
-        } catch (error) {
-          console.warn('⚠️ MCP connection issue:', error);
-          // Still mark deployment as successful even if MCP connection has issues
-          setMcpServerRunning(false);
-          setDeploymentStep(3);
-          setChatMessages([
-            { role: 'assistant', content: `✅ Contract deployment successful!\n\n📍 Address: ${deploymentResult.contract_address}\n\n⚠️ Note: MCP tools unavailable. Contract is deployed and usable.` }
-          ]);
-        }
-      };
-
-      // Download file helper
       const downloadFile = (content, filename) => {
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -617,45 +295,6 @@
         alert('Copied to clipboard!');
       };
 
-      // Chat message handler - connects to real chatbot API
-      const handleChatMessage = async () => {
-        if (!chatInput.trim()) return;
-
-        const userMessage = chatInput;  // Capture message before clearing
-        const userMsg = { role: 'user', content: userMessage };
-        setChatMessages(prev => [...prev, userMsg]);
-        setChatInput('');
-        setChatLoading(true);
-
-        try {
-          // Call the actual chatbot API
-          const response = await fetch('http://localhost:5000/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: userMessage })  // Use captured message
-          });
-
-          const data = await response.json();
-
-          let botMessage = '';
-          if (data.success && data.tool_called) {
-            botMessage = `📞 Called ${data.tool_called}()\n✅ ${data.response}`;
-          } else if (data.error) {
-            botMessage = `❌ Error: ${data.error}`;
-          } else {
-            botMessage = data.response || 'No response from server';
-          }
-
-          setChatMessages(prev => [...prev, { role: 'assistant', content: botMessage }]);
-        } catch (error) {
-          // Fallback if API not available
-          const botMessage = `⚠️ API Connection Issue: ${error.message}\n\n💡 Make sure chatbot_api.py is running on port 5000\nCommand: python mcp/chatbot_api.py`;
-          setChatMessages(prev => [...prev, { role: 'assistant', content: botMessage }]);
-        }
-
-        setChatLoading(false);
-      };
-
       return (
         <div className="min-h-screen py-8 px-4">
           <div className="max-w-7xl mx-auto">
@@ -664,7 +303,7 @@
               <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent mb-3 leading-none">
                 Agentics Smart Contract Translator
               </h1>
-              <p className="text-gray-300 text-lg">End-to-End Smart Contract Generation & Deployment Demo</p>
+              <p className="text-gray-300 text-lg">End-to-End Smart Contract Generation Demo</p>
             </div>
 
             {/* Phase 0: PDF Upload & Contract Type Selection */}
@@ -825,97 +464,43 @@
               </div>
             )}
 
-            {/* Post-Generation: Automated Deployment Phase */}
+            {/* Post-Generation: Download Phase */}
             {phase === 6 && (
-              <>
-                {console.log('📊 Rendering Phase 6 UI - Automated Deployment')}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Left Side: Deployment Status & Action */}
-                  <div className="space-y-6">
-                  {/* Auto-Deployment Status */}
+              <div className="grid grid-cols-1 gap-8">
+                {/* Generated Artifacts */}
+                <div className="space-y-6">
+                  {/* Generated Outputs */}
                   <div className="bg-gradient-to-br from-blue-900 to-purple-900 rounded-2xl p-8 border-2 border-blue-500">
                     <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                      🚀 Automated Deployment
+                      📦 Generated Artifacts
                     </h3>
 
-                    {deploymentStep === 0 && !deploymentLoading && (
-                      <div className="space-y-4">
-                        <p className="text-gray-300 mb-6">
-                          Your smart contract has been successfully generated! We can now automatically deploy it to a local Ganache network and set up your MCP server.
-                        </p>
-                        <button
-                          onClick={handleAutoDeploy}
-                          disabled={deploymentLoading}
-                          className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold rounded-lg transition-all text-lg"
-                        >
-                          {deploymentLoading ? '⏳ Deploying...' : '✅ Auto-Deploy Contract'}
-                        </button>
-                        <p className="text-xs text-gray-400 text-center">
-                          💡 Requires Ganache running on http://127.0.0.1:7545
+                    <div className="space-y-4">
+                      <p className="text-gray-300 mb-6">
+                        Your smart contract has been successfully generated! Download the files below for research, analysis, or manual deployment.
+                      </p>
+                      
+                      <div className="bg-gray-900 rounded-lg p-4 border border-green-600 space-y-3">
+                        <div className="flex items-center gap-2 text-green-400 font-semibold">
+                          <span>✅</span>
+                          <span>Translation Complete</span>
+                        </div>
+                        <p className="text-sm text-gray-400">
+                          All 6 phases finished successfully. Files are ready for download.
                         </p>
                       </div>
-                    )}
 
-                    {deploymentStep === 1 && deploymentLoading && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-3 animate-pulse">
-                          <div className="w-4 h-4 bg-yellow-500 rounded-full animate-bounce"></div>
-                          <span className="text-yellow-300 font-semibold">Deploying contract to testnet...</span>
-                        </div>
-                        <div className="bg-gray-900 rounded-lg p-4 border border-yellow-600">
-                          <p className="text-sm text-gray-300">
-                            ⏳ This may take 30-60 seconds. The contract is being compiled and deployed to your local Ganache instance.
-                          </p>
-                        </div>
+                      <div className="bg-blue-900/30 rounded-lg p-4 border border-blue-400">
+                        <p className="text-sm text-blue-200 font-semibold mb-2">💡 Research Focus</p>
+                        <p className="text-xs text-gray-300">
+                          This project focuses on evaluating smart contract generation quality. 
+                          You can manually deploy contracts for testing using Remix IDE or other tools.
+                        </p>
                       </div>
-                    )}
-
-                    {deploymentStep >= 2 && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">✅</span>
-                          <span className="text-green-300 font-semibold">Contract Deployed!</span>
-                        </div>
-                        
-                        <div className="bg-gray-900 rounded-lg p-4 border border-green-600 space-y-2">
-                          <div>
-                            <p className="text-xs text-gray-400">Contract Address:</p>
-                            <p className="text-sm text-green-300 font-mono break-all">{contractAddress}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-400">RPC URL:</p>
-                            <p className="text-sm text-green-300 font-mono">{rpcUrl}</p>
-                          </div>
-                        </div>
-
-                        {deploymentStep === 2 && (
-                          <div className="flex items-center gap-3 animate-pulse mt-4">
-                            <div className="w-4 h-4 bg-blue-500 rounded-full animate-bounce"></div>
-                            <span className="text-blue-300 font-semibold">Launching MCP Server...</span>
-                          </div>
-                        )}
-
-                        {deploymentStep === 3 && (
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl">✅</span>
-                            <span className="text-green-300 font-semibold">MCP Server Connected!</span>
-                          </div>
-                        )}
+                      
+                      <div className="space-y-2">
                       </div>
-                    )}
-
-                    {deploymentError && (
-                      <div className="bg-red-900 border border-red-600 rounded-lg p-4">
-                        <p className="text-red-300 text-sm mb-3">❌ Deployment Error:</p>
-                        <p className="text-gray-300 text-xs font-mono break-words mb-3">{deploymentError}</p>
-                        <button
-                          onClick={handleAutoDeploy}
-                          className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold transition-all"
-                        >
-                          🔄 Retry Deployment
-                        </button>
-                      </div>
-                    )}
+                    </div>
                   </div>
 
                   {/* Download Artifacts */}
@@ -946,143 +531,7 @@
                     </div>
                   </div>
                 </div>
-
-                {/* Right Side: Chatbot */}
-                <div className="bg-gray-800 rounded-2xl p-8 border border-cyan-700 border-2 h-fit flex flex-col">
-                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                    {icons.chat()}
-                    Smart Contract Chatbot
-                  </h3>
-
-                {!mcpServerRunning ? (
-                    <div className="text-center py-12">
-                      <div className="text-4xl mb-4">🤖</div>
-                      {deploymentStep < 2 ? (
-                        <>
-                          <p className="text-gray-400">Complete contract translation first</p>
-                          <p className="text-xs text-gray-500 mt-2">Then deploy the contract to activate the chatbot</p>
-                        </>
-                      ) : deploymentStep === 2 ? (
-                        <>
-                          <p className="text-gray-400">Launching MCP server...</p>
-                          <div className="flex justify-center mt-4">
-                            <div className="flex gap-2">
-                              <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce"></div>
-                              <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                              <div className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-gray-400">Waiting for MCP connection...</p>
-                          <p className="text-xs text-yellow-400 mt-4">Auto-connecting to chatbot...</p>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {/* Chat Messages */}
-                      <div className="flex-1 bg-gray-900 rounded-lg p-4 mb-4 h-96 overflow-y-auto border border-gray-700">
-                        {chatMessages.map((msg, idx) => (
-                          <div
-                            key={idx}
-                            className={`mb-3 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
-                          >
-                            <div
-                              className={`inline-block max-w-xs px-4 py-2 rounded-lg ${
-                                msg.role === 'user'
-                                  ? 'bg-purple-600 text-white'
-                                  : 'bg-gray-700 text-cyan-300'
-                              }`}
-                            >
-                              <p className="text-sm">{msg.content}</p>
-                            </div>
-                          </div>
-                        ))}
-                        {chatLoading && (
-                          <div className="text-left">
-                            <div className="inline-block px-4 py-2 bg-gray-700 text-gray-400 rounded-lg text-sm">
-                              <div className="flex gap-2">
-                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Chat Input */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && handleChatMessage()}
-                          placeholder="Ask to call functions..."
-                          className="flex-1 px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-cyan-500 text-sm"
-                          disabled={chatLoading}
-                        />
-                        <button
-                          onClick={handleChatMessage}
-                          disabled={chatLoading || !chatInput.trim()}
-                          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 text-white rounded font-semibold transition-all"
-                        >
-                          Send
-                        </button>
-                      </div>
-
-                      {/* Quick Actions */}
-                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                        <button
-                          onClick={() => {
-                            const msg = "Make a payment";
-                            setChatInput(msg);
-                          }}
-                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
-                        >
-                          💳 Make Payment
-                        </button>
-                        <button
-                          onClick={() => {
-                            const msg = "What's the status?";
-                            setChatInput(msg);
-                          }}
-                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
-                        >
-                          📊 Check Status
-                        </button>
-                        <button
-                          onClick={() => {
-                            const msg = "Confirm delivery or completion";
-                            setChatInput(msg);
-                          }}
-                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
-                        >
-                          ✓ Confirm Action
-                        </button>
-                        <button
-                          onClick={() => {
-                            const msg = "Get my balance";
-                            setChatInput(msg);
-                          }}
-                          className="px-2 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
-                        >
-                          💰 Get Balance
-                        </button>
-                      </div>
-
-                      {/* MCP Status */}
-                      <div className="mt-4 p-3 bg-green-900 border border-green-600 rounded-lg text-sm text-green-300">
-                        <p>✓ MCP Server Running</p>
-                        <p className="text-xs text-green-400">Connected to contract at: {contractAddress.slice(0, 10)}...</p>
-                      </div>
-                    </>
-                  )}
-                </div>
               </div>
-              </>
             )}
 
             {/* How It Works Section */}
@@ -1102,14 +551,14 @@
                     </ol>
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-cyan-400 mb-4">Automated Deployment & Testing</h3>
+                    <h3 className="text-lg font-bold text-cyan-400 mb-4">Research & Quality Evaluation</h3>
                     <ol className="space-y-3 text-gray-300 text-sm">
-                      <li>✅ <strong>One-Click Deployment:</strong> Auto-deploy to Ganache testnet</li>
-                      <li>✅ <strong>Auto Configuration:</strong> Contract address & RPC URL retrieved</li>
-                      <li>✅ <strong>MCP Server Launch:</strong> Automatically started and connected</li>
-                      <li>✅ <strong>Live Chatbot:</strong> Ask questions about your contract</li>
-                      <li>✅ <strong>Smart Execution:</strong> AI automatically calls contract functions</li>
-                      <li>✅ <strong>Download Artifacts:</strong> .sol, ABI, and MCP server available</li>
+                      <li>✅ <strong>Semantic Translation:</strong> 6-phase AI-powered pipeline</li>
+                      <li>✅ <strong>Security Analysis:</strong> Automated vulnerability detection</li>
+                      <li>✅ <strong>Code Quality:</strong> Generate compilable Solidity contracts</li>
+                      <li>✅ <strong>Schema Extraction:</strong> Parse natural language to structured data</li>
+                      <li>✅ <strong>ABI Generation:</strong> Extract contract interfaces</li>
+                      <li>✅ <strong>Download Artifacts:</strong> .sol, ABI, security reports, and MCP templates</li>
                     </ol>
                   </div>
                 </div>
