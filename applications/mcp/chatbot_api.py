@@ -28,17 +28,42 @@ sys.path.insert(0, str(contract_translator_path))
 
 from agentics import LLM, user_message, system_message
 
-# Import ContractTranslator from agentic_implementation
-try:
-    from agentic_implementation import IBMAgenticContractTranslator
-    ContractTranslator = IBMAgenticContractTranslator
-except ImportError:
-    # Fallback: try direct import
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("agentic_implementation", contract_translator_path / "agentic_implementation.py")
-    agentic_impl = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(agentic_impl)
-    ContractTranslator = agentic_impl.IBMAgenticContractTranslator
+# Check which implementation to use via environment variable
+# USE_MODULAR_CORE: 'true' (default) = use modular core/, 'false' = use legacy agentic_implementation.py
+use_modular_core = os.getenv('USE_MODULAR_CORE', 'true').lower() not in ('false', '0', 'no')
+
+print("\n" + "="*70)
+if use_modular_core:
+    print("📦 Loading: MODULAR Core Package (contract-translator/core/)")
+    print("   Toggle: Set USE_MODULAR_CORE=false to use legacy version")
+else:
+    print("📦 Loading: LEGACY agentic_implementation.py (monolithic)")
+    print("   Toggle: Set USE_MODULAR_CORE=true to use new modular core")
+print("="*70 + "\n")
+
+# Import ContractTranslator based on toggle
+if use_modular_core:
+    # Use modular core package
+    try:
+        from core import IBMAgenticContractTranslator
+        ContractTranslator = IBMAgenticContractTranslator
+        print("✓ Successfully loaded IBMAgenticContractTranslator from core package\n")
+    except ImportError as e:
+        print(f"⚠️  ERROR: Failed to import from core package: {e}")
+        print("   Falling back to legacy agentic_implementation.py\n")
+        from agentic_implementation import IBMAgenticContractTranslator
+        ContractTranslator = IBMAgenticContractTranslator
+else:
+    # Use legacy monolithic implementation
+    try:
+        from agentic_implementation import IBMAgenticContractTranslator
+        ContractTranslator = IBMAgenticContractTranslator
+        print("✓ Successfully loaded IBMAgenticContractTranslator from agentic_implementation.py\n")
+    except ImportError as e:
+        print(f"⚠️  ERROR: Failed to import from agentic_implementation.py: {e}")
+        print("   Attempting to load from core package as fallback\n")
+        from core import IBMAgenticContractTranslator
+        ContractTranslator = IBMAgenticContractTranslator
 
 # Load environment - try multiple locations
 env_paths = [

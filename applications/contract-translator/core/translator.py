@@ -1,0 +1,1115 @@
+"""
+IBM Agentics Contract Translator - Main orchestrator class
+"""
+
+import os
+import json
+from pathlib import Path
+from typing import Dict, List
+import PyPDF2
+from crewai import Agent, Task, Crew
+
+from agentics import LLM
+from .schemas import UniversalContractSchema
+from .programs import (
+    UniversalContractParserProgram,
+    UniversalSolidityGeneratorProgram,
+    SecurityAuditorProgram,
+    ABIGeneratorProgram,
+    MCPServerGeneratorProgram
+)
+from .task_builders import (
+    create_parser_task_description,
+    create_solidity_generator_task_description,
+    create_audit_task_description,
+    create_abi_generator_task_description
+)
+from .agents import _convert_to_crew_llm
+
+
+class IBMAgenticContractTranslator:
+    def __init__(self, model: str = "gpt-4o-mini"):
+        """
+        Initialize translator with Agentic pipeline using CrewAI Agents and Tasks
+        
+        Args:
+            model: LLM model to use (default: gpt-4o-mini for OpenAI)
+        
+        Note: IBM Agentics requires OPENAI_API_KEY in environment
+        """
+
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY required in .env file. "
+                "IBM Agentics uses OpenAI models by default."
+            )
+        
+        # Initialize Agentics LLM
+        self.llm = LLM(model=model)
+        
+        # Convert to CrewAI LLM for agents
+        self.crew_llm = _convert_to_crew_llm(self.llm)
+        
+        print(f"✓ IBM Agentics LLM initialized with {model}")
+        print("🤖 Initializing Agentic Pipeline with Agents...")
+        
+        # Keep legacy Program instances for backward compatibility
+        self.parser = UniversalContractParserProgram()
+        self.generator = UniversalSolidityGeneratorProgram()
+        self.auditor = SecurityAuditorProgram()
+        self.abi_generator = ABIGeneratorProgram()
+        self.mcp_generator = MCPServerGeneratorProgram()
+        
+        # Create specialized agents for each phase
+        self._create_agents()
+        
+        print("✓ All Agents initialized for agentic pipeline\n")
+    
+    def _create_agents(self):
+        """Create specialized agents for each phase of translation"""
+        
+        # Phase 2: Contract Parser Agent
+        self.parser_agent = Agent(
+            role="Contract Analysis Expert",
+            goal="Extract precise, specific information from legal contracts",
+            backstory=(
+                "You are an expert contract analyst specializing in extracting exact terminology, "
+                "function names, variable names, states, and conditions from legal documents. "
+                "You never use generic placeholders - only specific terms from the contract."
+            ),
+            llm=self.crew_llm,
+            verbose=False,
+            allow_delegation=False
+        )
+        
+        # Phase 3: Solidity Generator Agent
+        self.generator_agent = Agent(
+            role="Solidity Smart Contract Developer",
+            goal="Generate complete, production-ready Solidity smart contracts",
+            backstory=(
+                "You are a Solidity expert who generates COMPLETE, FUNCTIONAL smart contracts. "
+                "You implement every function with full logic, use require() for validation, "
+                "implement proper access control, and ensure all variables are actively used. "
+                "You never write placeholder code or empty functions."
+            ),
+            llm=self.crew_llm,
+            verbose=False,
+            allow_delegation=False
+        )
+        
+        # Phase 4: Security Auditor Agent
+        self.auditor_agent = Agent(
+            role="Blockchain Security Auditor",
+            goal="Identify security vulnerabilities in smart contracts with actionable recommendations",
+            backstory=(
+                "You are a blockchain security expert specializing in Solidity smart contract auditing. "
+                "You systematically check for: reentrancy attacks (check external calls + state changes), "
+                "access control flaws (verify onlyOwner/modifiers on sensitive functions), "
+                "integer overflow/underflow (analyze arithmetic operations), "
+                "unprotected ether withdrawal (check payable functions + transfer logic), "
+                "denial of service vulnerabilities (unbounded loops, block gas limits), "
+                "front-running risks (transaction ordering dependencies), "
+                "timestamp manipulation (avoid using block.timestamp for critical logic), "
+                "and unchecked external calls (verify return values). "
+                "You provide severity ratings (none/low/medium/high/critical) based on exploitability and impact. "
+                "You give specific line references and concrete remediation steps, not generic advice."
+            ),
+            llm=self.crew_llm,
+            verbose=False,
+            allow_delegation=False
+        )
+        
+        # Phase 5: ABI Generator Agent
+        self.abi_agent = Agent(
+            role="Ethereum ABI Specialist",
+            goal="Generate complete, accurate ABI specifications from Solidity contracts",
+            backstory=(
+                "You are an Ethereum ABI expert who generates precise, complete ABI JSON from Solidity contracts. "
+                "You extract ALL public/external functions with correct parameter types (address, uint256, string, etc.), "
+                "capture the constructor with its initialization parameters, "
+                "include ALL events with their indexed parameters for filtering, "
+                "specify correct state mutability (pure, view, payable, nonpayable), "
+                "and ensure type arrays match Solidity declarations exactly (uint256[], address[], etc.). "
+                "You never omit functions, never use wrong types, and always preserve parameter names for debugging. "
+                "Your ABI output must be valid JSON that can be used directly with web3.js or ethers.js."
+            ),
+            llm=self.crew_llm,
+            verbose=False,
+            allow_delegation=False
+        )
+        
+        # Phase 6: MCP Server Generator Agent
+        self.mcp_agent = Agent(
+            role="MCP Server Developer",
+            goal="Generate production-ready MCP server code for blockchain interaction",
+            backstory=(
+                "You are an expert Python developer specializing in Web3.py and MCP server generation. "
+                "You create complete, self-contained MCP servers with proper error handling and "
+                "transaction management for smart contract interaction."
+            ),
+            llm=self.crew_llm,
+            verbose=False,
+            allow_delegation=False
+        )
+    
+    def _clean_code_block(self, code: str) -> str:
+        """
+        Clean code output by removing markdown code fences, extra whitespace, and trailing text.
+        
+        Args:
+            code: Raw code string that may contain markdown formatting
+            
+        Returns:
+            Cleaned code string
+        """
+        # Remove markdown code fences (```solidity, ```, etc.)
+        import re
+        code = re.sub(r'^```\w*\n', '', code, flags=re.MULTILINE)
+        code = re.sub(r'\n```$', '', code, flags=re.MULTILINE)
+        code = code.strip()
+        
+        # For Solidity code, remove any English text after the final closing brace
+        # Find the last '}' that closes a contract/interface/library
+        if 'contract ' in code or 'interface ' in code or 'library ' in code:
+            # Find the position of the last '}' at the beginning of a line or with minimal indentation
+            lines = code.split('\n')
+            last_brace_idx = -1
+            
+            for i in range(len(lines) - 1, -1, -1):
+                stripped = lines[i].strip()
+                if stripped == '}' or (stripped.startswith('}') and not stripped[1:].strip().startswith('//')):
+                    last_brace_idx = i
+                    break
+            
+            # If we found a closing brace, truncate everything after it
+            if last_brace_idx != -1:
+                code = '\n'.join(lines[:last_brace_idx + 1])
+        
+        return code
+    
+    def _extract_json(self, text: str, expected_type):
+        """
+        Extract JSON from text that may contain additional formatting or markdown.
+        
+        Args:
+            text: Raw text containing JSON
+            expected_type: Expected type (class with model_validate, dict, or list)
+            
+        Returns:
+            Parsed JSON object of expected_type
+        """
+        import json
+        import re
+        
+        # Try to extract JSON from markdown code blocks
+        json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+        if json_match:
+            text = json_match.group(1)
+        
+        # Remove any leading/trailing whitespace
+        text = text.strip()
+        
+        # Try to find JSON object/array boundaries if text has extra content
+        if not text.startswith(('{', '[')):
+            # Look for first { or [
+            json_start = min(
+                (text.find('{') if text.find('{') != -1 else len(text)),
+                (text.find('[') if text.find('[') != -1 else len(text))
+            )
+            if json_start < len(text):
+                text = text[json_start:]
+        
+        # Parse JSON
+        try:
+            parsed = json.loads(text)
+            
+            # If expected_type is a Pydantic model, validate
+            if hasattr(expected_type, 'model_validate'):
+                return expected_type.model_validate(parsed)
+            # Otherwise return the parsed dict/list
+            return parsed
+            
+        except json.JSONDecodeError as e:
+            print(f"   ⚠️  JSON parsing failed: {e}")
+            # Try to fix common issues
+            # Remove trailing commas
+            text = re.sub(r',(\s*[}\]])', r'\1', text)
+            try:
+                parsed = json.loads(text)
+                if hasattr(expected_type, 'model_validate'):
+                    return expected_type.model_validate(parsed)
+                return parsed
+            except:
+                raise ValueError(f"Could not parse JSON from text: {text[:200]}...")
+    
+    def extract_text_from_pdf(self, pdf_path: str) -> str:
+        """Extract text from PDF"""
+        print(f"📄 Reading PDF: {pdf_path}")
+        with open(pdf_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            return text.strip()
+    
+    def _run_agentic_pipeline(
+        self,
+        contract_text: str,
+        generate_mcp_server: bool = True
+    ) -> Dict:
+        """
+        Execute the 6-phase translation pipeline using CrewAI Agents and Tasks.
+        This is the NEW agentic approach.
+        
+        Returns:
+            Dict with keys: schema, solidity, audit, abi, mcp_server (optional)
+        """
+        
+        print("\n[AGENTIC PIPELINE] Using Agent-Task orchestration")
+        
+        results = {}
+        
+        # ===== PHASE 2: Contract Analysis (Parser Agent) =====
+        print("\n[Phase 2/6] Contract Analysis (Parser Agent)")
+        
+        task_parse = Task(
+            description=create_parser_task_description(contract_text),
+            expected_output="JSON object representing the parsed contract schema with exact names",
+            agent=self.parser_agent
+        )
+        
+        crew_parse = Crew(
+            agents=[self.parser_agent],
+            tasks=[task_parse],
+            verbose=False
+        )
+        
+        parse_result = crew_parse.kickoff()
+        
+        # Parse the JSON result into UniversalContractSchema
+        try:
+            # Extract JSON from the result
+            parse_text = str(parse_result).strip()
+            if "```json" in parse_text:
+                parse_text = parse_text.split("```json")[1].split("```")[0].strip()
+            
+            parsed_json = json.loads(parse_text)
+            
+            # Clean and validate the parsed data (same logic as Program version)
+            if "financial_terms" in parsed_json and parsed_json["financial_terms"]:
+                cleaned_terms = []
+                for term in parsed_json["financial_terms"]:
+                    try:
+                        if not isinstance(term.get("amount"), (int, float)):
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                    if not isinstance(term.get("currency"), str):
+                        term["currency"] = "ETH"
+                    if not term.get("purpose"):
+                        term["purpose"] = "Contract payment"
+                    cleaned_terms.append(term)
+                parsed_json["financial_terms"] = cleaned_terms
+            
+            if "parties" in parsed_json and parsed_json["parties"]:
+                cleaned_parties = []
+                for party in parsed_json["parties"]:
+                    if party.get("name") and party.get("role"):
+                        cleaned_parties.append(party)
+                parsed_json["parties"] = cleaned_parties
+            
+            if not parsed_json.get("parties"):
+                parsed_json["parties"] = [{"name": "Unknown Party", "role": "other"}]
+            
+            if not parsed_json.get("contract_type"):
+                parsed_json["contract_type"] = "other"
+            
+            schema = UniversalContractSchema(**parsed_json)
+            results['schema'] = schema
+            print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            
+        except Exception as e:
+            print(f"⚠️ Error parsing schema: {e}")
+            # Fallback to Program-based parsing
+            schema = self.parser.forward(contract_text, self.llm)
+            results['schema'] = schema
+        
+        # ===== PHASE 3: Solidity Generation (Generator Agent) =====
+        print("\n[Phase 3/6] Code Generation (Generator Agent)")
+        
+        task_generate = Task(
+            description=create_solidity_generator_task_description(schema),
+            expected_output="Complete Solidity smart contract code (^0.8.0)",
+            agent=self.generator_agent
+        )
+        
+        crew_generate = Crew(
+            agents=[self.generator_agent],
+            tasks=[task_generate],
+            verbose=False
+        )
+        
+        generate_result = crew_generate.kickoff()
+        solidity_code = str(generate_result).strip()
+        
+        # Clean markdown code fences
+        if "```solidity" in solidity_code:
+            solidity_code = solidity_code.split("```solidity")[1].split("```")[0].strip()
+        elif "```" in solidity_code:
+            solidity_code = solidity_code.split("```")[1].split("```")[0].strip()
+        
+        results['solidity'] = solidity_code
+        print(f"✓ Generated {len(solidity_code.splitlines())} lines")
+        
+        # ===== PHASE 4: Security Audit (Auditor Agent) =====
+        print("\n[Phase 4/6] Security Analysis (Auditor Agent)")
+        
+        task_audit = Task(
+            description=create_audit_task_description(solidity_code),
+            expected_output="JSON object with security audit results",
+            agent=self.auditor_agent
+        )
+        
+        crew_audit = Crew(
+            agents=[self.auditor_agent],
+            tasks=[task_audit],
+            verbose=False
+        )
+        
+        audit_result = crew_audit.kickoff()
+        audit_text = str(audit_result).strip()
+        
+        # Parse audit JSON
+        if "```json" in audit_text:
+            audit_text = audit_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in audit_text:
+            audit_text = audit_text.split("```")[1].split("```")[0].strip()
+        
+        try:
+            audit_report = json.loads(audit_text)
+        except:
+            audit_report = {
+                "severity_level": "unknown",
+                "approved": False,
+                "issues": ["Failed to parse audit report"],
+                "recommendations": [],
+                "vulnerability_count": 0,
+                "security_score": "N/A"
+            }
+        
+        results['audit'] = audit_report
+        severity = audit_report.get('severity_level', 'unknown')
+        score = audit_report.get('security_score', 'N/A')
+        print(f"✓ Audit Complete: Severity={severity}, Score={score}")
+        
+        # ===== PHASE 5: ABI Generation (ABI Agent) =====
+        print("\n[Phase 5/6] Interface Generation (ABI Agent)")
+        
+        task_abi = Task(
+            description=create_abi_generator_task_description(solidity_code),
+            expected_output="JSON array representing the contract ABI",
+            agent=self.abi_agent
+        )
+        
+        crew_abi = Crew(
+            agents=[self.abi_agent],
+            tasks=[task_abi],
+            verbose=False
+        )
+        
+        abi_result = crew_abi.kickoff()
+        abi_text = str(abi_result).strip()
+        
+        # Parse ABI JSON
+        if "```json" in abi_text:
+            abi_text = abi_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in abi_text:
+            abi_text = abi_text.split("```")[1].split("```")[0].strip()
+        
+        try:
+            abi = json.loads(abi_text)
+        except:
+            abi = []
+        
+        results['abi'] = abi
+        print(f"✓ Generated {len(abi)} ABI elements")
+        
+        # ===== PHASE 6: MCP Server Generation (Optional) =====
+        if generate_mcp_server:
+            print("\n[Phase 6/6] MCP Server Generation (MCP Agent)")
+            
+            # For MCP server, we'll still use the Program approach as it's complex
+            # But we could convert this to Agent/Task later if needed
+            contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
+            contract_name = contract_name[:40]
+            
+            mcp_server_code = self.mcp_generator.forward(abi, schema, contract_name, self.llm)
+            results['mcp_server'] = mcp_server_code
+            print(f"✓ Generated MCP server ({len(mcp_server_code.splitlines())} lines)")
+        else:
+            print("\n[Phase 6/6] MCP Server Generation - SKIPPED")
+        
+        return results
+    
+    def translate_contract_streaming(
+        self, 
+        input_path: str, 
+        output_dir: str = "./output",
+        require_audit_approval: bool = True,
+        generate_mcp_server: bool = True,
+        use_agentic_pipeline: bool = True
+    ):
+        """
+        Streaming version that yields phase updates as they complete.
+        Yields dict with {phase: int, status: str, data: dict}
+        
+        Args:
+            input_path: Path to contract file (PDF or text)
+            output_dir: Output directory for generated files
+            require_audit_approval: Whether to require user approval on security issues
+            generate_mcp_server: Whether to generate MCP server code
+            use_agentic_pipeline: If True, use Agent/Task/Crew approach. If False, use legacy Program approach.
+        """
+        
+        print("\n" + "="*70)
+        if use_agentic_pipeline:
+            print("IBM AGENTICS CONTRACT TRANSLATOR (STREAMING - Agent/Task Pipeline)")
+        else:
+            print("IBM AGENTICS CONTRACT TRANSLATOR (STREAMING - Legacy Program Pipeline)")
+        print("="*70)
+        
+        results = {}
+        
+        # Phase 1: Document Processing
+        print("\n[Phase 1/6] Document Processing")
+        if input_path.endswith('.pdf'):
+            contract_text = self.extract_text_from_pdf(input_path)
+            source = "PDF"
+        else:
+            with open(input_path, 'r', encoding='utf-8') as f:
+                contract_text = f.read()
+            source = "text file"
+        print(f"✓ Extracted {len(contract_text)} characters from {source}")
+        
+        yield {
+            'phase': 1,
+            'status': 'complete',
+            'data': {
+                'title': 'Document Processing',
+                'message': f'Extracted {len(contract_text)} characters from {source}'
+            }
+        }
+        
+        # Execute phases 2-6 based on mode
+        if use_agentic_pipeline:
+            # NEW: Use Agent/Task/Crew orchestration with streaming yields
+            
+            # Phase 2: Contract Analysis (Parser Agent)
+            print("\n[Phase 2/6] Contract Analysis (Parser Agent)")
+            task_desc = create_parser_task_description(contract_text)
+            task = Task(description=task_desc, expected_output="JSON schema", agent=self.parser_agent)
+            crew = Crew(agents=[self.parser_agent], tasks=[task], verbose=False)
+            
+            try:
+                result_raw = crew.kickoff()
+                result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
+                schema = self._extract_json(result_text, UniversalContractSchema)
+                results['schema'] = schema
+                print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            except Exception as e:
+                print(f"   ⚠️  Agent approach failed, using fallback Program: {e}")
+                schema = self.parser.forward(contract_text, self.llm)
+                results['schema'] = schema
+            
+            # Convert schema to dict for JSON serialization
+            try:
+                schema_dict = schema.model_dump() if hasattr(schema, 'model_dump') else schema.__dict__
+            except:
+                schema_dict = {
+                    'contract_type': str(schema.contract_type),
+                    'parties': [{'name': p.name, 'role': p.role} for p in schema.parties] if schema.parties else [],
+                    'financial_terms': [{'amount': t.amount, 'currency': t.currency, 'purpose': t.purpose} for t in schema.financial_terms] if schema.financial_terms else []
+                }
+            
+            # Extract counts and details for informative message
+            num_parties = len(schema.parties) if hasattr(schema, 'parties') and schema.parties else 0
+            num_terms = len(schema.financial_terms) if hasattr(schema, 'financial_terms') and schema.financial_terms else 0
+            num_obligations = len(schema.obligations) if hasattr(schema, 'obligations') and schema.obligations else 0
+            num_assets = len(schema.assets) if hasattr(schema, 'assets') and schema.assets else 0
+            num_dates = len(schema.dates) if hasattr(schema, 'dates') and schema.dates else 0
+            
+            # Also check the schema_dict in case attributes aren't populated
+            if num_parties == 0 and isinstance(schema_dict, dict):
+                num_parties = len(schema_dict.get('parties', []))
+            if num_terms == 0 and isinstance(schema_dict, dict):
+                num_terms = len(schema_dict.get('financial_terms', []))
+            if num_obligations == 0 and isinstance(schema_dict, dict):
+                num_obligations = len(schema_dict.get('obligations', []))
+            if num_assets == 0 and isinstance(schema_dict, dict):
+                num_assets = len(schema_dict.get('assets', []))
+            if num_dates == 0 and isinstance(schema_dict, dict):
+                num_dates = len(schema_dict.get('dates', []))
+            
+            # Check conditions dict for function/variable/state names
+            conditions = schema.conditions if hasattr(schema, 'conditions') else schema_dict.get('conditions', {})
+            num_functions = len(conditions.get('function_names', [])) if isinstance(conditions, dict) else 0
+            num_variables = len(conditions.get('variable_names', [])) if isinstance(conditions, dict) else 0
+            num_states = len(conditions.get('state_names', [])) if isinstance(conditions, dict) else 0
+            num_events = len(conditions.get('events', [])) if isinstance(conditions, dict) else 0
+            
+            # Build rich, informative message with actual extracted data
+            message_parts = []
+            if num_parties > 0:
+                message_parts.append(f"{num_parties} parties")
+            if num_terms > 0:
+                message_parts.append(f"{num_terms} financial terms")
+            if num_obligations > 0:
+                message_parts.append(f"{num_obligations} obligations")
+            if num_assets > 0:
+                message_parts.append(f"{num_assets} assets")
+            if num_dates > 0:
+                message_parts.append(f"{num_dates} dates")
+            if num_functions > 0:
+                message_parts.append(f"{num_functions} functions")
+            if num_variables > 0:
+                message_parts.append(f"{num_variables} variables")
+            if num_states > 0:
+                message_parts.append(f"{num_states} states")
+            if num_events > 0:
+                message_parts.append(f"{num_events} events")
+            
+            if message_parts:
+                message = f"Extracted: {', '.join(message_parts)}"
+            else:
+                # Really minimal fallback
+                contract_type_name = schema.contract_type.replace('_', ' ').title() if hasattr(schema, 'contract_type') else schema_dict.get('contract_type', 'Unknown').replace('_', ' ').title()
+                message = f"Analyzed {contract_type_name} contract structure"
+            
+            yield {
+                'phase': 2,
+                'status': 'complete',
+                'data': {
+                    'title': 'Contract Analysis',
+                    'message': message,
+                    'contract_type': schema.contract_type,
+                    'parties': schema_dict.get('parties', []) if isinstance(schema_dict, dict) else [],
+                    'financial_terms': schema_dict.get('financial_terms', []) if isinstance(schema_dict, dict) else [],
+                    'schema': schema_dict
+                }
+            }
+            
+            # Phase 3: Solidity Generation (Generator Agent)
+            print("\n[Phase 3/6] Code Generation (Generator Agent)")
+            task_desc = create_solidity_generator_task_description(schema)
+            task = Task(description=task_desc, expected_output="Solidity code", agent=self.generator_agent)
+            crew = Crew(agents=[self.generator_agent], tasks=[task], verbose=False)
+            
+            try:
+                result_raw = crew.kickoff()
+                solidity_code = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
+                solidity_code = self._clean_code_block(solidity_code)
+                results['solidity'] = solidity_code
+                print(f"✓ Generated {len(solidity_code.splitlines())} lines")
+            except Exception as e:
+                print(f"   ⚠️  Agent approach failed, using fallback Program: {e}")
+                solidity_code = self.generator.forward(schema, self.llm)
+                results['solidity'] = solidity_code
+            
+            yield {
+                'phase': 3,
+                'status': 'complete',
+                'data': {
+                    'title': 'Code Generation',
+                    'message': f'Generated {len(solidity_code.splitlines())} lines of Solidity',
+                    'solidity': solidity_code
+                }
+            }
+            
+            # Phase 4: Security Audit (Auditor Agent)
+            print("\n[Phase 4/6] Security Analysis (Auditor Agent)")
+            task_desc = create_audit_task_description(solidity_code)
+            task = Task(description=task_desc, expected_output="Security audit JSON", agent=self.auditor_agent)
+            crew = Crew(agents=[self.auditor_agent], tasks=[task], verbose=False)
+            
+            try:
+                result_raw = crew.kickoff()
+                result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
+                audit_report = self._extract_json(result_text, dict)
+                results['audit'] = audit_report
+            except Exception as e:
+                print(f"   ⚠️  Agent approach failed, using fallback Program: {e}")
+                audit_report = self.auditor.forward(solidity_code, self.llm)
+                results['audit'] = audit_report
+            
+            severity = audit_report.get('severity_level', 'unknown')
+            score = audit_report.get('security_score', 'N/A')
+            issues = audit_report.get('issues', [])
+            print(f"✓ Audit Complete: Severity={severity}, Score={score}")
+            
+            yield {
+                'phase': 4,
+                'status': 'needs_approval',
+                'data': {
+                    'title': 'Security Audit',
+                    'message': f'Severity: {severity.upper()}, Score: {score}',
+                    'severity_level': severity,
+                    'security_score': score,
+                    'issues': issues,
+                    'vulnerability_count': audit_report.get('vulnerability_count', 0),
+                    'recommendations': audit_report.get('recommendations', [])
+                }
+            }
+            
+            # Phase 5: ABI Generation (ABI Agent)
+            print("\n[Phase 5/6] Interface Generation (ABI Agent)")
+            task_desc = create_abi_generator_task_description(solidity_code)
+            task = Task(description=task_desc, expected_output="ABI JSON array", agent=self.abi_agent)
+            crew = Crew(agents=[self.abi_agent], tasks=[task], verbose=False)
+            
+            try:
+                result_raw = crew.kickoff()
+                result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
+                abi = self._extract_json(result_text, list)
+                results['abi'] = abi
+                print(f"✓ Generated {len(abi)} ABI elements")
+            except Exception as e:
+                print(f"   ⚠️  Agent approach failed, using fallback Program: {e}")
+                abi = self.abi_generator.forward(solidity_code, self.llm)
+                results['abi'] = abi
+            
+            yield {
+                'phase': 5,
+                'status': 'complete',
+                'data': {
+                    'title': 'ABI Generation',
+                    'message': f'Generated {len(abi)} ABI elements',
+                    'abi': abi
+                }
+            }
+            
+            # Phase 6: MCP Server Generation (still using Program - complex case)
+            if generate_mcp_server:
+                print("\n[Phase 6/6] MCP Server Generation (MCP Generator Program)")
+                contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
+                contract_name = contract_name[:40]
+                mcp_server_code = self.mcp_generator.forward(abi, schema, contract_name, self.llm)
+                results['mcp_server'] = mcp_server_code
+                print(f"✓ Generated MCP server ({len(mcp_server_code.splitlines())} lines)")
+            else:
+                print("\n[Phase 6/6] MCP Server Generation - SKIPPED")
+                
+        else:
+            # Legacy: Use Program.forward() calls with streaming yields
+            
+            # Phase 2: Contract Analysis
+            print("\n[Phase 2/6] Contract Analysis (Parser Program)")
+            schema = self.parser.forward(contract_text, self.llm)
+            results['schema'] = schema
+            print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            
+            # Convert schema to dict for JSON serialization
+            try:
+                schema_dict = schema.model_dump() if hasattr(schema, 'model_dump') else schema.__dict__
+            except Exception as e:
+                print(f"   ⚠️  Error converting schema to dict: {e}")
+                schema_dict = {
+                    'contract_type': str(schema.contract_type),
+                    'parties': [{'name': p.name, 'role': p.role} for p in schema.parties] if schema.parties else [],
+                    'financial_terms': [{'amount': t.amount, 'currency': t.currency, 'purpose': t.purpose} for t in schema.financial_terms] if schema.financial_terms else []
+                }
+            
+            yield {
+                'phase': 2,
+                'status': 'complete',
+                'data': {
+                    'title': 'Contract Analysis',
+                    'message': f'Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms',
+                    'contract_type': schema.contract_type,
+                    'parties': schema_dict.get('parties', []) if isinstance(schema_dict, dict) else [],
+                    'financial_terms': schema_dict.get('financial_terms', []) if isinstance(schema_dict, dict) else [],
+                    'schema': schema_dict
+                }
+            }
+            
+            # Phase 3: Solidity Generation
+            print("\n[Phase 3/6] Code Generation (Generator Program)")
+            solidity_code = self.generator.forward(schema, self.llm)
+            results['solidity'] = solidity_code
+            print(f"✓ Generated {len(solidity_code.splitlines())} lines")
+            
+            yield {
+                'phase': 3,
+                'status': 'complete',
+                'data': {
+                    'title': 'Code Generation',
+                    'message': f'Generated {len(solidity_code.splitlines())} lines of Solidity',
+                    'solidity': solidity_code
+                }
+            }
+            
+            # Phase 4: Security Audit
+            print("\n[Phase 4/6] Security Analysis (Auditor Program)")
+            audit_report = self.auditor.forward(solidity_code, self.llm)
+            results['audit'] = audit_report
+            severity = audit_report.get('severity_level', 'unknown')
+            score = audit_report.get('security_score', 'N/A')
+            issues = audit_report.get('issues', [])
+            print(f"✓ Audit Complete: Severity={severity}, Score={score}")
+            
+            yield {
+                'phase': 4,
+                'status': 'needs_approval',
+                'data': {
+                    'title': 'Security Audit',
+                    'message': f'Severity: {severity.upper()}, Score: {score}',
+                    'severity_level': severity,
+                    'security_score': score,
+                    'issues': issues,
+                    'vulnerability_count': audit_report.get('vulnerability_count', 0),
+                    'recommendations': audit_report.get('recommendations', [])
+                }
+            }
+            
+            # Phase 5: ABI Generation
+            print("\n[Phase 5/6] Interface Generation (ABI Program)")
+            abi = self.abi_generator.forward(solidity_code, self.llm)
+            results['abi'] = abi
+            print(f"✓ Generated {len(abi)} ABI elements")
+            
+            yield {
+                'phase': 5,
+                'status': 'complete',
+                'data': {
+                    'title': 'ABI Generation',
+                    'message': f'Generated {len(abi)} ABI elements',
+                    'abi': abi
+                }
+            }
+            
+            # Phase 6: MCP Server Generation
+            if generate_mcp_server:
+                print("\n[Phase 6/6] MCP Server Generation (MCP Generator Program)")
+                contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
+                contract_name = contract_name[:40]
+                mcp_server_code = self.mcp_generator.forward(abi, schema, contract_name, self.llm)
+                results['mcp_server'] = mcp_server_code
+                print(f"✓ Generated MCP server ({len(mcp_server_code.splitlines())} lines)")
+            else:
+                print("\n[Phase 6/6] MCP Server Generation - SKIPPED")
+        
+        # Save all outputs (applies to both modes)
+        self._save_outputs(results, output_dir, schema)
+        
+        print("\n" + "="*70)
+        print("✅ TRANSLATION COMPLETE")
+        print("="*70)
+        
+        yield {
+            'phase': 6,
+            'status': 'complete',
+            'data': {
+                'title': 'MCP Server Generation',
+                'message': f'Generated MCP server',
+                'mcp_server': results.get('mcp_server', '')
+            }
+        }
+    
+    def translate_contract(
+        self, 
+        input_path: str, 
+        output_dir: str = "./output",
+        require_audit_approval: bool = True,
+        generate_mcp_server: bool = True,
+        use_agentic_pipeline: bool = True
+    ) -> Dict:
+        """
+        Complete translation workflow.
+        
+        Args:
+            input_path: Path to contract file (PDF or text)
+            output_dir: Output directory for generated files
+            require_audit_approval: Whether to require user approval on security issues
+            generate_mcp_server: Whether to generate MCP server code
+            use_agentic_pipeline: If True, use Agent/Task/Crew approach. If False, use legacy Program approach.
+        
+        Returns:
+            Dict with translation results
+        """
+        
+        print("\n" + "="*70)
+        if use_agentic_pipeline:
+            print("IBM AGENTICS CONTRACT TRANSLATOR (Agent/Task Pipeline)")
+        else:
+            print("IBM AGENTICS CONTRACT TRANSLATOR (Legacy Program Pipeline)")
+        print("="*70)
+        
+        # Phase 1: Document Processing
+        print("\n[Phase 1/6] Document Processing")
+        if input_path.endswith('.pdf'):
+            contract_text = self.extract_text_from_pdf(input_path)
+        else:
+            with open(input_path, 'r', encoding='utf-8') as f:
+                contract_text = f.read()
+        print(f"✓ Extracted {len(contract_text)} characters")
+        
+        # Execute pipeline based on mode
+        if use_agentic_pipeline:
+            # NEW: Use Agent/Task/Crew orchestration
+            results = self._run_agentic_pipeline(contract_text, generate_mcp_server)
+        else:
+            # Legacy: Use Program.forward() calls
+            results = {}
+            
+            # Phase 2: Contract Analysis
+            print("\n[Phase 2/6] Contract Analysis (Parser Program)")
+            schema = self.parser.forward(contract_text, self.llm)
+            results['schema'] = schema
+            print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            
+            # Phase 3: Solidity Generation
+            print("\n[Phase 3/6] Code Generation (Generator Program)")
+            solidity_code = self.generator.forward(schema, self.llm)
+            results['solidity'] = solidity_code
+            print(f"✓ Generated {len(solidity_code.splitlines())} lines")
+            
+            # Phase 4: Security Audit
+            print("\n[Phase 4/6] Security Analysis (Auditor Program)")
+            audit_report = self.auditor.forward(solidity_code, self.llm)
+            results['audit'] = audit_report
+            severity = audit_report.get('severity_level', 'unknown')
+            score = audit_report.get('security_score', 'N/A')
+            print(f"✓ Audit: Severity={severity}, Score={score}")
+            
+            # Phase 5: ABI Generation
+            print("\n[Phase 5/6] Interface Generation (ABI Program)")
+            abi = self.abi_generator.forward(solidity_code, self.llm)
+            results['abi'] = abi
+            print(f"✓ Generated {len(abi)} ABI elements")
+            
+            # Phase 6: MCP Server Generation
+            if generate_mcp_server:
+                print("\n[Phase 6/6] MCP Server Generation (MCP Generator Program)")
+                contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
+                contract_name = contract_name[:40]
+                mcp_server_code = self.mcp_generator.forward(abi, schema, contract_name, self.llm)
+                results['mcp_server'] = mcp_server_code
+                print(f"✓ Generated MCP server ({len(mcp_server_code.splitlines())} lines)")
+            else:
+                print("\n[Phase 6/6] MCP Server Generation - SKIPPED")
+        
+        # Check audit approval (applies to both modes)
+        schema = results.get('schema')
+        audit_report = results.get('audit', {})
+        
+        if require_audit_approval and not audit_report.get('approved', False):
+            print("\n⚠️  Security issues detected!")
+            for i, issue in enumerate(audit_report.get('issues', [])[:3], 1):
+                print(f"   {i}. {issue}")
+            
+            response = input("\n   Continue? (yes/no): ").lower()
+            if response != 'yes':
+                raise Exception("Halted due to security concerns")
+        
+        # Save all outputs
+        self._save_outputs(results, output_dir, schema)
+        
+        print("\n" + "="*70)
+        print("✅ TRANSLATION COMPLETE")
+        print("="*70)
+        
+        return results
+    
+    def _save_outputs(self, results: Dict, output_dir: str, schema):
+        """Save all outputs including MCP server"""
+        
+        print("\n💾 Saving outputs...")
+        
+        # Create directories
+        base_output_path = Path(output_dir)
+        base_output_path.mkdir(exist_ok=True, parents=True)
+        
+        contract_type = schema.contract_type.replace('_', ' ').title()
+        subdirectory_name = contract_type.replace(' ', '_')
+        
+        run_number = 1
+        subdir_path = base_output_path / f"{subdirectory_name}_{run_number}"
+        while subdir_path.exists():
+            run_number += 1
+            subdir_path = base_output_path / f"{subdirectory_name}_{run_number}"
+        
+        subdir_path.mkdir(exist_ok=True, parents=True)
+        
+        # Generate contract filename
+        contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
+        contract_name = contract_name[:40]
+        
+        # Save Solidity
+        with open(subdir_path / f"{contract_name}.sol", 'w', encoding='utf-8') as f:
+            f.write(results['solidity'])
+        print(f"   ✓ {contract_name}.sol")
+
+        # Save ABI
+        abi_filename = f"{contract_name}.abi.json"
+        with open(subdir_path / abi_filename, 'w', encoding='utf-8') as f:
+            json.dump(results['abi'], f, indent=2)
+        print(f"   ✓ {abi_filename}")
+
+        # Save schema
+        with open(subdir_path / "contract_schema.json", 'w', encoding='utf-8') as f:
+            json.dump(results['schema'].model_dump(), f, indent=2)
+        print(f"   ✓ contract_schema.json")
+ 
+        # Save audit
+        with open(subdir_path / "security_audit.json", 'w', encoding='utf-8') as f:
+            json.dump(results['audit'], f, indent=2)
+        print(f"   ✓ security_audit.json")
+        
+        # Save MCP Server
+        if 'mcp_server' in results:
+            mcp_filename = f"{contract_name}_mcp_server.py"
+            with open(subdir_path / mcp_filename, 'w', encoding='utf-8') as f:
+                f.write(results['mcp_server'])
+            print(f"   ✓ {mcp_filename}")
+            
+            # Create .env file
+            env_content = f"""# MCP Server Configuration for {contract_name}
+# Fill in your values below, then run the MCP server
+
+# Blockchain RPC endpoint (e.g., http://127.0.0.1:8545 for Ganache)
+RPC_URL=http://127.0.0.1:8545
+
+# Private key for signing transactions (get from Ganache, without 0x prefix)
+PRIVATE_KEY=your_private_key_here
+
+# Deployed contract address (get after deploying Solidity contract)
+CONTRACT_ADDRESS=0x...
+"""
+            with open(subdir_path / ".env", 'w', encoding='utf-8') as f:
+                f.write(env_content)
+            print(f"   ✓ .env")
+            
+            # Create .env.example
+            env_example = f"""# MCP Server Configuration for {contract_name}
+# This is an example. Copy to .env and fill in your values
+
+# Blockchain RPC endpoint (Infura, Alchemy, or local Ganache)
+RPC_URL=http://127.0.0.1:8545
+
+# Private key for signing transactions (without 0x prefix)
+PRIVATE_KEY=your_private_key_here
+
+# Deployed contract address (will be filled after deployment)
+CONTRACT_ADDRESS=0x...
+"""
+            with open(subdir_path / ".env.example", 'w', encoding='utf-8') as f:
+                f.write(env_example)
+            print(f"   ✓ .env.example")
+        
+        # Create README
+        schema = results['schema']
+        audit = results['audit']
+        
+        readme = f"""# IBM Agentics Contract Translation
+
+## Contract Summary
+- **Type**: {schema.contract_type}
+- **Parties**: {', '.join(p.name for p in schema.parties)}
+- **Financial Terms**: {len(schema.financial_terms)} term(s)
+
+## Security Audit
+- **Status**: {'✅ APPROVED' if audit.get('approved') else '⚠️ REVIEW NEEDED'}
+- **Severity**: {audit['severity_level'].upper()}
+- **Score**: {audit.get('security_score', 'N/A')}
+
+## Generated Files
+
+### Smart Contract Files
+1. **{contract_name}.sol** - Solidity smart contract ({len(results['solidity'].splitlines())} lines)
+2. **{contract_name}.abi.json** - Contract ABI ({len(results['abi'])} elements)
+
+### Configuration & Documentation
+3. **contract_schema.json** - Structured contract data
+4. **security_audit.json** - Security audit report
+
+### MCP Server
+5. **{contract_name}_mcp_server.py** - Custom MCP server ({len(results.get('mcp_server', '').splitlines())} lines)
+6. **.env.example** - Environment configuration template
+
+## Using the MCP Server
+
+### 1. Setup Environment
+```bash
+# Copy and configure environment file
+cp .env.example .env
+
+# Edit .env with your values:
+# - RPC_URL: Your blockchain endpoint
+# - PRIVATE_KEY: Your wallet private key
+# - CONTRACT_ADDRESS: Deployed contract address
+```
+
+### 2. Install Dependencies
+```bash
+pip install web3 python-dotenv fastmcp
+```
+
+### 3. Deploy Contract
+First deploy the Solidity contract to get CONTRACT_ADDRESS:
+```bash
+# Using Remix, Hardhat, or web3.py
+# Update CONTRACT_ADDRESS in .env after deployment
+```
+
+### 4. Run MCP Server
+```bash
+python {contract_name}_mcp_server.py
+```
+
+### 5. Available Tools
+The MCP server exposes these tools based on the contract ABI:
+{self._generate_tool_list(results.get('abi', []))}
+
+## Next Steps
+1. ✅ Review security audit
+2. ✅ Deploy Solidity contract to testnet
+3. ✅ Update .env with CONTRACT_ADDRESS
+4. ✅ Run MCP server
+5. ✅ Connect AI agents to MCP server
+6. ✅ Test contract interactions
+
+---
+*Generated by IBM Agentics Framework*
+*MCP Server auto-generated from ABI*
+"""
+        
+        with open(subdir_path / "README.md", 'w', encoding='utf-8') as f:
+            f.write(readme)
+        print(f"   ✓ README.md")
+        
+        try:
+            display_path = subdir_path.relative_to(Path.cwd())
+        except ValueError:
+            display_path = subdir_path.resolve()
+        print(f"\n📁 Outputs saved to: {display_path}")
+    
+    def _generate_tool_list(self, abi: List[Dict]) -> str:
+        """Generate markdown list of available MCP tools"""
+        
+        tools = []
+        for item in abi:
+            if item.get('type') == 'function':
+                name = item.get('name')
+                stateMutability = item.get('stateMutability', 'nonpayable')
+                
+                if stateMutability == 'payable':
+                    tools.append(f"- `{name}()` - Payable transaction")
+                elif stateMutability in ['view', 'pure']:
+                    tools.append(f"- `{name}()` - Read-only query")
+                else:
+                    tools.append(f"- `{name}()` - State-changing transaction")
+        
+        return '\n'.join(tools) if tools else "- No tools available"
+
+
+__all__ = ['IBMAgenticContractTranslator']

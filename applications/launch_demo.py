@@ -2,6 +2,10 @@
 """
 Auto-launcher for contract translation demo
 Starts the Flask API server and opens demo.html in browser
+
+Environment Variables:
+- USE_MODULAR_CORE: Set to 'false' to use legacy agentic_implementation.py (default: 'true')
+  Example: USE_MODULAR_CORE=false python launch_demo.py
 """
 
 import os
@@ -16,9 +20,14 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 # Get the workspace root (parent of where this script is)
 workspace_root = Path(__file__).parent.absolute()
 
+# Check which implementation to use
+use_modular = os.getenv('USE_MODULAR_CORE', 'true').lower() not in ('false', '0', 'no')
+impl_mode = "Modular Core Package" if use_modular else "Legacy Monolithic"
+
 print("\n" + "="*70)
 print("🚀 IBM Agentics - Smart Contract Translator (Research Edition)")
 print("   Dataset-Driven Quality Evaluation")
+print(f"   Implementation: {impl_mode}")
 print("="*70 + "\n")
 
 # Ensure required packages are installed
@@ -84,19 +93,47 @@ http_thread.start()
 print("   [1/3] HTTP server starting on http://localhost:8000")
 
 # Start the translation API in background
-print("   [2/3] Translation API starting on http://localhost:5000\n")
+print(f"   [2/3] Translation API starting on http://localhost:5000 ({impl_mode})\n")
 try:
+    # Pass environment variable to child process
+    env = os.environ.copy()
+    env['USE_MODULAR_CORE'] = 'true' if use_modular else 'false'
+    
     # Use Popen to start in FOREGROUND so we can see logs
     chatbot_process = subprocess.Popen(
         [sys.executable, str(mcp_dir / "chatbot_api.py")],
-        cwd=str(workspace_root)
+        cwd=str(workspace_root),
+        env=env
     )
     
-    # Open demo in browser after giving server a moment
-    print("⏳ Waiting 3 seconds for servers to initialize...\n")
-    time.sleep(3)
+    # Wait for HTTP server to be ready before opening browser
+    print("⏳ Waiting for servers to initialize...")
     
-    print("   [3/3] Opening demo pages in browser\n")
+    import socket
+    def wait_for_server(host, port, timeout=10):
+        """Wait until server is accepting connections"""
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                with socket.create_connection((host, port), timeout=1):
+                    return True
+            except (socket.error, ConnectionRefusedError):
+                time.sleep(0.2)
+        return False
+    
+    # Wait for HTTP server (port 8000)
+    if wait_for_server('localhost', 8000, timeout=5):
+        print("   ✓ HTTP server ready on port 8000")
+    else:
+        print("   ⚠️  HTTP server slow to start, continuing anyway...")
+    
+    # Wait for Flask API (port 5000) to be ready
+    if wait_for_server('localhost', 5000, timeout=10):
+        print("   ✓ Flask API ready on port 5000")
+    else:
+        print("   ⚠️  Flask API slow to start, continuing anyway...")
+    
+    print("\n   [3/3] Opening demo pages in browser\n")
     demo_url = "http://localhost:8000/demo.html"
     sampler_url = "http://localhost:8000/sampler.html"
     
@@ -118,7 +155,11 @@ try:
     print("\n📊 What's running:")
     print("   • Translation Demo: http://localhost:8000/demo.html")
     print("   • Dataset Browser: http://localhost:8000/sampler.html")
-    print("   • Translation API: http://localhost:5000")
+    print(f"   • Translation API: http://localhost:5000 ({impl_mode})")
+    if not use_modular:
+        print("\n⚠️  Using LEGACY implementation. Set USE_MODULAR_CORE=true to use new modular core.")
+    else:
+        print("\n✓ Using MODULAR core package. Set USE_MODULAR_CORE=false to use legacy version.")
     print("\n🔬 Research Workflow:")
     print("   1. Browse dataset: http://localhost:8000/sampler.html")
     print("   2. Click 'Open in Demo' to load a contract")
