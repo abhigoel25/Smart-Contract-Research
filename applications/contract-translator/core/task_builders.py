@@ -15,11 +15,22 @@ def create_parser_task_description(contract_text: str) -> str:
     """
     Create task description for the Contract Parser Agent.
     Returns the full task description including the contract text.
+    Uses the comprehensive prompt from programs.py for maximum accuracy.
     """
     return f"""Analyze this contract and extract ALL SPECIFIC information exactly as mentioned.
 
 CONTRACT TEXT:
 {contract_text}
+
+CRITICAL INSTRUCTIONS:
+1. Extract the EXACT function names mentioned in the contract (e.g., "initializeLease", "payRent", "confirmDelivery")
+2. Extract the EXACT variable names mentioned (e.g., "monthlyRent", "securityDeposit", "deliveryDate")
+3. Extract the EXACT state names mentioned (e.g., "Pending", "Active", "Completed", "Terminated")
+4. Extract the EXACT party roles as described in the contract
+5. DO NOT use generic placeholders - use the specific terminology from the contract
+6. Capture ALL conditions, transitions, and logic flows mentioned
+
+Your goal: Create a structured representation that preserves ALL specific details from the contract text.
 
 PAY CLOSE ATTENTION TO:
 1. **Specific Function Names**: If the contract says "The main functions include [initializeLease(), payRent(), terminateLease()]", extract EXACTLY those names
@@ -94,7 +105,8 @@ EXTRACT EVERYTHING SPECIFIC - DO NOT USE GENERIC NAMES OR PLACEHOLDERS."""
 def create_solidity_generator_task_description(schema: UniversalContractSchema) -> str:
     """
     Create task description for the Solidity Generator Agent.
-    Extracts specific requirements from the schema.
+    Uses the comprehensive prompt from programs.py with 10-point rules,
+    forbidden patterns, and complete code examples.
     """
     conditions = schema.conditions if schema.conditions else {}
     function_names = conditions.get('function_names', [])
@@ -105,6 +117,75 @@ def create_solidity_generator_task_description(schema: UniversalContractSchema) 
     logic_conditions = conditions.get('logic_conditions', [])
     
     return f"""Generate a COMPLETE, FUNCTIONAL Solidity ^0.8.0 smart contract that FULLY implements this specification.
+
+CRITICAL GENERATION RULES - STRICT COMPLIANCE REQUIRED:
+
+1. SEMANTIC FIDELITY OVER NAME MATCHING
+   - Never generate functions without FULL implementation
+   - No placeholder logic, no "// logic goes here" comments
+   - Every function mentioned must have complete, executable behavior
+
+2. EXPLICIT STATE MACHINE ENFORCEMENT
+   - All states must be reachable and mutually exclusive
+   - State transitions use require() with clear error messages
+   - Never allow invalid state transitions
+   - Every state-dependent function must enforce valid state with require()
+
+3. ACCESS CONTROL MUST BE ENFORCED
+   - All administrative functions use modifiers (onlyOwner, onlyRole, etc)
+   - No state-changing function callable by arbitrary addresses unless specified
+   - Define and use access roles consistently
+
+4. NO SILENT FAILURES - PROHIBITED PATTERN
+   - NEVER use: if (condition) return;
+   - ALWAYS use: require(condition, "Error message");
+   - All invalid conditions MUST revert with descriptive messages
+
+5. ECONOMIC LOGIC MUST BE COMPLETE
+   - If pricing/fees/swaps/payments mentioned: implement ALL calculations
+   - Funds MUST be transferred or accounted for
+   - Variables like price, feeRate, amountRaised MUST be read and written in live logic
+   - No passive declarations - every financial variable must affect behavior
+
+6. TIME-BASED CONDITIONS MUST BE ENFORCED
+   - If deadlines/start times/durations mentioned: store AND check using block.timestamp
+   - Time variables MUST affect contract behavior
+   - Implement automatic state transitions based on time
+
+7. EVENT SEMANTICS MUST MATCH ACTIONS
+   - Events represent real, completed actions only
+   - Each state change or economic transfer emits separate, specific event
+   - Never merge unrelated actions into single event (e.g., no "TransferAndApproval")
+   - Event names must be clear: Transfer, Approval, Swap, Paused, etc
+
+8. NO UNUSED OR DECORATIVE CODE
+   - Every variable, state, function, event MUST be actively used
+   - If something cannot be implemented: either infer reasonable behavior or omit it
+   - No "filler" code
+
+9. STANDARD SOLIDITY SAFETY - MANDATORY
+   - Use require() for all validation
+   - Validate zero addresses
+   - Ensure invariants (e.g., total supply consistency)
+   - Use SafeMath patterns where needed
+
+10. INTERNAL COHERENCE REQUIRED
+    - Names must reflect actual behavior
+    - States correspond to real operational modes
+    - Functions must not contradict each other
+    - Variables must not represent multiple concepts
+
+FORBIDDEN PATTERNS:
+- Empty function bodies
+- Unused state variables
+- Silent failures (if/return pattern)
+- Placeholder comments
+- Decorative events that don't represent real actions
+- State variables that are never read
+- Time variables that are never checked
+- Access-controlled functions without modifiers
+
+YOUR GOAL: Generate production-ready, complete, semantically accurate Solidity code.
 
 CONTRACT ANALYSIS:
 {schema.model_dump_json(indent=2)}
@@ -137,6 +218,103 @@ FINANCIAL TERMS TO IMPLEMENT COMPLETELY:
 
 OBLIGATIONS TO IMPLEMENT AS COMPLETE FUNCTIONS:
 {chr(10).join(f"- {o.party} must: {o.description} (deadline: {o.deadline if o.deadline else 'none'}) - implement full logic with checks" for o in schema.obligations)}
+
+MANDATORY IMPLEMENTATION CHECKLIST:
+□ All functions have COMPLETE implementation (no "// TODO" or empty bodies)
+□ All financial variables (price, fee, amount) are USED in calculations
+□ All time variables (deadline, startTime) are CHECKED with block.timestamp
+□ All state transitions use require() to prevent invalid changes
+□ All administrative functions have access control modifiers
+□ All economic transfers actually move funds (msg.value, transfer calls)
+□ All events are emitted when their corresponding action completes
+□ No silent failures - all invalid conditions revert with require()
+□ All declared variables are read or written in at least one function
+□ State machine is complete - all states are reachable and have transitions
+
+STRUCTURE YOUR CONTRACT:
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract [ContractName] {{
+    // === STATE ENUM (if states mentioned) ===
+    enum State {{ {', '.join(state_names) if state_names else 'Active, Completed, Terminated'} }}
+    State public currentState;
+    
+    // === ACCESS CONTROL ===
+    address public owner;
+    // Add role-based addresses for each party
+    
+    modifier onlyOwner() {{
+        require(msg.sender == owner, "Not authorized");
+        _;
+    }}
+    
+    modifier inState(State _state) {{
+        require(currentState == _state, "Invalid state for this action");
+        _;
+    }}
+    
+    // === STATE VARIABLES (using EXACT names) ===
+    // Declare all variables mentioned in contract
+    // CRITICAL: Every variable MUST be used in at least one function
+    
+    // === EVENTS (using EXACT names, separate events for different actions) ===
+    // One event per action type, never merge unrelated actions
+    
+    // === CONSTRUCTOR ===
+    constructor(...) {{
+        owner = msg.sender;
+        // Initialize all state variables
+        // Set initial state
+        currentState = State.[InitialState];
+    }}
+    
+    // === MAIN FUNCTIONS (using EXACT names with FULL implementation) ===
+    // Implement complete logic for each function:
+    // - Access control (modifiers)
+    // - State checks (require currentState)
+    // - Validation (require conditions)
+    // - State updates
+    // - Fund transfers (if applicable)
+    // - Event emissions
+    // - State transitions (if applicable)
+    
+    // === VIEW FUNCTIONS (getters for all state variables) ===
+    // Provide read access to all state
+    
+    // === INTERNAL HELPER FUNCTIONS (if needed) ===
+    // Extract complex logic into private functions
+}}
+```
+
+EXAMPLE OF COMPLETE vs INCOMPLETE:
+
+❌ INCOMPLETE (forbidden):
+```solidity
+function swapTokensForEth(uint256 amount) external {{
+    require(swappingEnabled, "Swap disabled");
+    // Logic goes here
+}}
+```
+
+✅ COMPLETE (required):
+```solidity
+function swapTokensForEth(uint256 amount) external {{
+    require(swappingEnabled, "Swap disabled");
+    require(balances[msg.sender] >= amount, "Insufficient balance");
+    require(address(this).balance >= amount * ethPrice, "Insufficient ETH");
+    
+    balances[msg.sender] -= amount;
+    totalSupply -= amount;
+    
+    uint256 ethAmount = amount * ethPrice;
+    (bool success, ) = msg.sender.call{{value: ethAmount}}("");
+    require(success, "ETH transfer failed");
+    
+    emit TokensSwapped(msg.sender, amount, ethAmount);
+}}
+```
 
 Return ONLY complete, production-ready Solidity code with ALL logic fully implemented."""
 
@@ -276,3 +454,166 @@ Return ONLY the JSON array (no markdown, no explanation):
     ]
   }}
 ]"""
+
+
+def create_mcp_task_description(abi, schema, contract_name: str) -> str:
+    """
+    Create task description for the MCP Server Generator Agent.
+    Uses the comprehensive prompt from programs.py.
+    """
+    # Extract function information from ABI
+    functions = [item for item in abi if item.get('type') == 'function']
+    payable_functions = [f for f in functions if f.get('stateMutability') == 'payable']
+    nonpayable_functions = [f for f in functions if f.get('stateMutability') == 'nonpayable']
+    view_functions = [f for f in functions if f.get('stateMutability') in ['view', 'pure']]
+    
+    import json
+    
+    return f"""Generate a complete MCP server for this {schema.contract_type} smart contract.
+
+CONTRACT NAME: {contract_name}
+CONTRACT TYPE: {schema.contract_type}
+PARTIES: {[f"{p.name} ({p.role})" for p in schema.parties]}
+
+ABI SUMMARY:
+- Payable functions: {len(payable_functions)}
+- Non-payable functions: {len(nonpayable_functions)}
+- View functions: {len(view_functions)}
+
+COMPLETE ABI:
+{json.dumps(abi, indent=2)}
+
+Generate a Python MCP server file with CORRECT FastMCP API:
+
+1. **Imports (MUST use FastMCP, not old MCP)**:
+   ```python
+   import os
+   import json
+   from pathlib import Path
+   from web3 import Web3
+   from dotenv import load_dotenv
+   from fastmcp import FastMCP
+   ```
+
+2. **Setup (Load .env from SAME DIRECTORY as script, Load ABI from .abi.json file)**:
+   ```python
+   import os
+   import json
+   from pathlib import Path
+   from dotenv import load_dotenv
+   
+   # Load .env from the same directory as this script
+   env_path = Path(__file__).parent / '.env'
+   load_dotenv(dotenv_path=env_path)
+   
+   # Load ABI from the same directory as this script
+   abi_path = Path(__file__).parent / '{contract_name}.abi.json'
+   with open(abi_path, 'r') as f:
+       contract_abi = json.load(f)
+   
+   RPC_URL = os.getenv('RPC_URL')
+   PRIVATE_KEY = os.getenv('PRIVATE_KEY')
+   CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
+   
+   web3 = Web3(Web3.HTTPProvider(RPC_URL))
+   account = web3.eth.account.from_key(PRIVATE_KEY)
+   contract = web3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=contract_abi)
+   ```
+
+3. **Create FastMCP instance**:
+   ```python
+   mcp = FastMCP("{contract_name}")
+   ```
+
+4. **Create @mcp.tool() decorated functions for EACH ABI function**:
+   
+   For PAYABLE functions:
+   - Build transaction with correct value
+   - Sign and send transaction
+   - Return {{"tx_hash": hash}}
+   
+   For NON-PAYABLE functions:
+   - Build transaction (no value)
+   - Sign and send transaction
+   - Return {{"tx_hash": hash}}
+   
+   For VIEW functions:
+   - Call function (read-only)
+   - Return result directly
+   
+5. **Documentation**:
+   - Each @mcp.tool() function must have docstring
+   - Explain what it does, who can call it, parameters, return value
+   - Handle errors gracefully
+
+6. **Error Handling**:
+   - Wrap each tool in try/except
+   - Return {{"error": str(e)}} on failure
+
+7. **Main Block (CRITICAL)**:
+   ```python
+   if __name__ == "__main__":
+       mcp.run()
+   ```
+
+CRITICAL CODE EXAMPLES:
+
+Setup must use local .env file:
+```python
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+```
+
+Transaction building for non-payable:
+```python
+txn = contract.functions.function_name(param1).buildTransaction({{
+    'from': account.address,
+    'nonce': web3.eth.get_transaction_count(account.address),
+    'gas': 2000000,
+    'gasPrice': web3.to_wei('20', 'gwei')
+}})
+signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+return {{"tx_hash": tx_hash.hex()}}
+```
+
+Transaction building for payable:
+```python
+txn = contract.functions.makePayment().buildTransaction({{
+    'from': account.address,
+    'nonce': web3.eth.get_transaction_count(account.address),
+    'gas': 2000000,
+    'gasPrice': web3.to_wei('20', 'gwei'),
+    'value': web3.to_wei(5, 'ether')
+}})
+signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+return {{"tx_hash": tx_hash.hex()}}
+```
+
+View function:
+```python
+result = contract.functions.getBalance().call()
+return {{"result": result}}
+```
+
+IMPORTANT RULES:
+- Function names must match ABI exactly
+- Include ALL functions from ABI
+- Use @mcp.tool() decorator (not @tool())
+- Load ABI from {contract_name}.abi.json file in same directory (do NOT hardcode ABI)
+- Load .env from same directory as script
+- ALWAYS initialize: account = web3.eth.account.from_key(PRIVATE_KEY)
+- Use 'from': account.address in all transactions
+- Use web3.eth.get_transaction_count(), NOT web3.eth.getTransactionCount()
+- Use web3.to_wei(), NOT web3.toWei()
+- Use web3.eth.send_raw_transaction(), NOT web3.eth.sendRawTransaction()
+- Use Web3.to_checksum_address(), NOT Web3.toChecksumAddress()
+- For payable functions, include 'value': web3.to_wei(amount, 'ether')
+- File must be self-contained and runnable
+
+Return ONLY the complete Python code, no explanations."""

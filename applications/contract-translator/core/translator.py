@@ -22,7 +22,8 @@ from .task_builders import (
     create_parser_task_description,
     create_solidity_generator_task_description,
     create_audit_task_description,
-    create_abi_generator_task_description
+    create_abi_generator_task_description,
+    create_mcp_task_description
 )
 from .agents import _convert_to_crew_llm
 
@@ -688,13 +689,26 @@ class IBMAgenticContractTranslator:
                 }
             }
             
-            # Phase 6: MCP Server Generation (still using Program - complex case)
+            # Phase 6: MCP Server Generation (MCP Agent)
             if generate_mcp_server:
-                print("\n[Phase 6/6] MCP Server Generation (MCP Generator Program)")
+                print("\n[Phase 6/6] MCP Server Generation (MCP Agent)")
                 contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
                 contract_name = contract_name[:40]
-                mcp_server_code = self.mcp_generator.forward(abi, schema, contract_name, self.llm)
-                results['mcp_server'] = mcp_server_code
+                
+                task_desc = create_mcp_task_description(abi, schema, contract_name)
+                task = Task(description=task_desc, expected_output="Complete Python MCP server code", agent=self.mcp_agent)
+                crew = Crew(agents=[self.mcp_agent], tasks=[task], verbose=False)
+                
+                try:
+                    result_raw = crew.kickoff()
+                    result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
+                    mcp_server_code = self._clean_code_block(result_text)
+                    results['mcp_server'] = mcp_server_code
+                except Exception as e:
+                    print(f"   ⚠️  Agent approach failed, using fallback Program: {e}")
+                    mcp_server_code = self.mcp_generator.forward(abi, schema, contract_name, self.llm)
+                    results['mcp_server'] = mcp_server_code
+                
                 print(f"✓ Generated MCP server ({len(mcp_server_code.splitlines())} lines)")
             else:
                 print("\n[Phase 6/6] MCP Server Generation - SKIPPED")

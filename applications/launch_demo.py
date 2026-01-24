@@ -25,13 +25,13 @@ use_modular = os.getenv('USE_MODULAR_CORE', 'true').lower() not in ('false', '0'
 impl_mode = "Modular Core Package" if use_modular else "Legacy Monolithic"
 
 print("\n" + "="*70)
-print("🚀 IBM Agentics - Smart Contract Translator (Research Edition)")
+print("IBM Agentics - Smart Contract Translator (Research Edition)")
 print("   Dataset-Driven Quality Evaluation")
 print(f"   Implementation: {impl_mode}")
 print("="*70 + "\n")
 
 # Ensure required packages are installed
-print("📦 Checking dependencies...")
+print("Checking dependencies...")
 required_packages = {
     'flask': 'flask',
     'flask_cors': 'flask-cors',
@@ -44,20 +44,20 @@ required_packages = {
 for import_name, pip_name in required_packages.items():
     try:
         __import__(import_name)
-        print(f"   ✓ {pip_name}")
+        print(f"   {pip_name}")
     except ImportError:
-        print(f"   ⚠️  Installing {pip_name}...")
+        print(f"   Installing {pip_name}...")
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', pip_name, '-q'])
-        print(f"   ✓ {pip_name} installed")
+        print(f"   {pip_name} installed")
 
-print("\n✓ All dependencies ready!\n")
+print("\nAll dependencies ready!\n")
 
 # Add paths - make sure they're absolute
 mcp_dir = workspace_root / "mcp"
 contract_translator_dir = workspace_root / "contract-translator"
 demo_file = contract_translator_dir / "demo.html"
 
-print("📍 Workspace Paths:")
+print("Workspace Paths:")
 print(f"   Root: {workspace_root}")
 print(f"   Demo: {demo_file}")
 
@@ -65,17 +65,17 @@ print(f"   Demo: {demo_file}")
 sampler_file = contract_translator_dir / "sampler.html"
 
 if not demo_file.exists():
-    print(f"\n❌ Error: demo.html not found at {demo_file}")
+    print(f"\nError: demo.html not found at {demo_file}")
     sys.exit(1)
 
 if not sampler_file.exists():
-    print(f"\n⚠️ Warning: sampler.html not found at {sampler_file}")
+    print(f"\nWarning: sampler.html not found at {sampler_file}")
     print("   Dataset browser will not be available.\n")
 else:
-    print(f"   ✓ Demo files found (demo.html + sampler.html)\n")
+    print(f"   Demo files found (demo.html + sampler.html)\n")
 
 # Start HTTP server for demo.html in background thread
-print("🌐 Starting servers...\n")
+print("Starting servers...\n")
 
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -107,7 +107,7 @@ try:
     )
     
     # Wait for HTTP server to be ready before opening browser
-    print("⏳ Waiting for servers to initialize...")
+    print("Waiting for servers to initialize")
     
     import socket
     def wait_for_server(host, port, timeout=10):
@@ -123,15 +123,15 @@ try:
     
     # Wait for HTTP server (port 8000)
     if wait_for_server('localhost', 8000, timeout=5):
-        print("   ✓ HTTP server ready on port 8000")
+        print("   HTTP server ready on port 8000")
     else:
-        print("   ⚠️  HTTP server slow to start, continuing anyway...")
+        print("   HTTP server slow to start, continuing anyway...")
     
     # Wait for Flask API (port 5000) to be ready
     if wait_for_server('localhost', 5000, timeout=10):
-        print("   ✓ Flask API ready on port 5000")
+        print("   Flask API ready on port 5000")
     else:
-        print("   ⚠️  Flask API slow to start, continuing anyway...")
+        print("   Flask API slow to start, continuing anyway...")
     
     print("\n   [3/3] Opening demo pages in browser\n")
     demo_url = "http://localhost:8000/demo.html"
@@ -139,34 +139,34 @@ try:
     
     try:
         webbrowser.open(demo_url)
-        print(f"   ✓ Demo opened: {demo_url}")
+        print(f"   Demo opened: {demo_url}")
         time.sleep(1)  # Small delay between opens
         webbrowser.open(sampler_url)
-        print(f"   ✓ Sampler opened: {sampler_url}\n")
+        print(f"   Sampler opened: {sampler_url}\n")
     except Exception as e:
-        print(f"   ⚠️  Could not open browser automatically")
+        print(f"   Could not open browser automatically")
         print(f"   → Please open manually:")
         print(f"      Demo: {demo_url}")
         print(f"      Sampler: {sampler_url}\n")
     
     print("="*70)
-    print("✅ DEMO IS READY!")
+    print("DEMO IS READY!")
     print("="*70)
-    print("\n📊 What's running:")
+    print("\nWhat's running:")
     print("   • Translation Demo: http://localhost:8000/demo.html")
     print("   • Dataset Browser: http://localhost:8000/sampler.html")
     print(f"   • Translation API: http://localhost:5000 ({impl_mode})")
     if not use_modular:
-        print("\n⚠️  Using LEGACY implementation. Set USE_MODULAR_CORE=true to use new modular core.")
+        print("\nUsing LEGACY implementation. Set USE_MODULAR_CORE=true to use new modular core.")
     else:
-        print("\n✓ Using MODULAR core package. Set USE_MODULAR_CORE=false to use legacy version.")
-    print("\n🔬 Research Workflow:")
+        print("\nUsing MODULAR core package. Set USE_MODULAR_CORE=false to use legacy version.")
+    print("\nResearch Workflow:")
     print("   1. Browse dataset: http://localhost:8000/sampler.html")
     print("   2. Click 'Open in Demo' to load a contract")
     print("   3. Or paste text directly at: http://localhost:8000/demo.html")
     print("   4. Translate & evaluate generated Solidity contracts")
-    print("\n📊 Dataset: requirement_fsm_code.jsonl (21,976 contracts)")
-    print("\n📝 Logs below (Ctrl+C to stop):\n")
+    print("\nDataset: requirement_fsm_code.jsonl (21,976 contracts)")
+    print("\nLogs below (Ctrl+C to stop):\n")
     
     # Keep the process alive
     chatbot_process.wait()
@@ -178,8 +178,8 @@ except KeyboardInterrupt:
         chatbot_process.wait(timeout=5)
     except subprocess.TimeoutExpired:
         chatbot_process.kill()
-    print("✓ Server stopped")
+    print("Server stopped")
     sys.exit(0)
 except Exception as e:
-    print(f"❌ Failed to start translation API: {e}")
+    print(f"Failed to start translation API: {e}")
     sys.exit(1)
