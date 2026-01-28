@@ -1350,13 +1350,17 @@ EVALUATION INSTRUCTIONS
 ═══════════════════════════════════════════════════════════════════════════════
 
 Evaluate the contract across FIVE dimensions. For each, provide:
-1. A numerical score (0-100)
+1. A numerical score (0-100) - BE PRECISE! Use exact scores like 73, 81, 92, not just multiples of 5
 2. Detailed breakdown showing what earned/lost points
 3. Specific evidence from the code with line references
+
+**CRITICAL: Scores must reflect actual points earned/lost. If you calculate 73 points, score is 73, NOT 75.**
 
 ═══════════════════════════════════════════════════════════════════════════════
 METRIC 1: FUNCTIONAL COMPLETENESS (0-100 points)
 ═══════════════════════════════════════════════════════════════════════════════
+
+**Calculate exact score based on points earned. Example: 4 functions × 10pts = 40, quality penalties -7 = 33.**
 
 **Scoring Rules:**
 
@@ -1406,6 +1410,8 @@ B. Function Implementation Quality (Max 50 points):
 METRIC 2: VARIABLE/PARAMETER FIDELITY (0-100 points)
 ═══════════════════════════════════════════════════════════════════════════════
 
+**Calculate exact score based on points earned. Example: 8 vars × 10pts = 80, 2 wrong types × -5pts = 70, NOT 75.**
+
 **Scoring Rules:**
 
 A. State Variable Completeness (Max 60 points):
@@ -1450,6 +1456,8 @@ B. Function Parameter Quality (Max 40 points):
 ═══════════════════════════════════════════════════════════════════════════════
 METRIC 3: STATE MACHINE CORRECTNESS (0-100 points)
 ═══════════════════════════════════════════════════════════════════════════════
+
+**Calculate exact score. Example: 4 states × 8pts = 32, transitions 17pts, guards 12pts = 61.**
 
 **Scoring Rules:**
 
@@ -1502,6 +1510,8 @@ C. State Guards (Max 25 points):
 ═══════════════════════════════════════════════════════════════════════════════
 METRIC 4: BUSINESS LOGIC FIDELITY (0-100 points) - MOST IMPORTANT
 ═══════════════════════════════════════════════════════════════════════════════
+
+**Calculate exact score. Example: obligations 23pts + financial 19pts + temporal 8pts = 50.**
 
 **Scoring Rules:**
 
@@ -1568,6 +1578,8 @@ D. Conditional Logic (Max 20 points):
 ═══════════════════════════════════════════════════════════════════════════════
 METRIC 5: CODE QUALITY (0-100 points)
 ═══════════════════════════════════════════════════════════════════════════════
+
+**Calculate exact score. Example: placeholders -2pts from 30, events 13pts, structure 17pts = 58.**
 
 **Scoring Rules:**
 

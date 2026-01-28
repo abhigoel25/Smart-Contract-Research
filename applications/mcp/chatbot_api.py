@@ -836,6 +836,226 @@ def random_contract():
         }), 500
 
 
+@app.route('/api/batch-translate', methods=['POST'])
+def batch_translate():
+    """Process multiple contracts in batch and return results"""
+    import random
+    import time
+    from datetime import datetime
+    
+    try:
+        data = request.json
+        num_contracts = data.get('num_contracts', 100)
+        seed = data.get('seed', None)
+        
+        print(f"\n🔄 Starting batch translation of {num_contracts} contracts...")
+        
+        # Load dataset
+        dataset_path = Path(__file__).parent.parent / 'requirement_fsm_code.jsonl'
+        if not dataset_path.exists():
+            return jsonify({"error": "Dataset not found"}), 404
+        
+        # Read contracts
+        contracts = []
+        with open(dataset_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        contracts.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        
+        if not contracts:
+            return jsonify({"error": "No contracts in dataset"}), 404
+        
+        # Sample contracts
+        if seed is not None:
+            random.seed(seed)
+        
+        sample_size = min(num_contracts, len(contracts))
+        sample_contracts = random.sample(contracts, sample_size)
+        
+        # Create batch results directory
+        batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results_dir = Path(__file__).parent.parent / "contract-translator" / "output" / f"batch_{batch_id}"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # SSE generator function
+        def generate():
+            batch_results = []
+            
+            for idx, contract in enumerate(sample_contracts):
+                contract_num = idx + 1
+                contract_text = contract.get('user_requirement', '')
+                
+                yield f"data: {json.dumps({'type': 'batch_progress', 'current': contract_num, 'total': sample_size, 'status': 'starting'})}\n\n"
+                
+                print(f"\n[{contract_num}/{sample_size}] Processing contract...")
+                start_time = time.time()
+                
+                try:
+                    # Initialize translator
+                    translator = ContractTranslator()
+                    
+                    # Save contract text to temporary file
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tmp_file:
+                        tmp_file.write(contract_text)
+                        temp_text_path = tmp_file.name
+                    
+                    # Track individual phases
+                    phase_times = {}
+                    phase_data = {}
+                    
+                    # Run translation pipeline with file path
+                    for event in translator.translate_contract_streaming(
+                        input_path=temp_text_path,
+                        output_dir=str(results_dir),
+                        require_audit_approval=False,
+                        generate_mcp_server=False
+                    ):
+                        phase = event.get('phase', 0)
+                        status = event.get('status', '')
+                        data_payload = event.get('data', {})
+                        
+                        # Track phase timing
+                        if status == 'complete' and phase > 0:
+                            phase_times[f'phase_{phase}'] = time.time() - start_time
+                        
+                        # Store phase results
+                        if phase == 3 and 'solidity' in data_payload:
+                            phase_data['solidity'] = data_payload['solidity']
+                        elif phase == 4 and 'audit' in data_payload:
+                            phase_data['audit'] = data_payload['audit']
+                        elif phase == 5 and 'abi' in data_payload:
+                            phase_data['abi'] = data_payload['abi']
+                        elif phase == 7 and 'quality_evaluation' in data_payload:
+                            phase_data['quality'] = data_payload['quality_evaluation']
+                        
+                        # Send phase progress
+                        yield f"data: {json.dumps({'type': 'contract_phase', 'contract': contract_num, 'phase': phase, 'status': status})}\n\n"
+                    
+                    end_time = time.time()
+                    latency = end_time - start_time
+                    
+                    # Extract quality scores
+                    quality_eval = phase_data.get('quality', {})
+                    composite_score = quality_eval.get('composite_score', {})
+                    
+                    # Save individual contract results
+                    contract_result = {
+                        'contract_id': contract_num,
+                        'batch_id': batch_id,
+                        'timestamp': datetime.now().isoformat(),
+                        'contract_text': contract_text[:500],  # Truncated for storage
+                        'latency_seconds': latency,
+                        'phase_times': phase_times,
+                        'quality_evaluation': quality_eval,
+                        'final_score': composite_score.get('final_score', 0),
+                        'grade': composite_score.get('grade', 'N/A'),
+                        'metric_scores': {
+                            'functional_completeness': quality_eval.get('metric_1_functional_completeness', {}).get('score', 0),
+                            'variable_fidelity': quality_eval.get('metric_2_variable_fidelity', {}).get('score', 0),
+                            'state_machine': quality_eval.get('metric_3_state_machine', {}).get('score', 0),
+                            'business_logic': quality_eval.get('metric_4_business_logic', {}).get('score', 0),
+                            'code_quality': quality_eval.get('metric_5_code_quality', {}).get('score', 0)
+                        },
+                        'solidity_code': phase_data.get('solidity', ''),
+                        'audit_report': phase_data.get('audit', {}),
+                        'abi': phase_data.get('abi', '')
+                    }
+                    
+                    # Save to file
+                    contract_file = results_dir / f"contract_{contract_num:03d}.json"
+                    with open(contract_file, 'w') as f:
+                        json.dump(contract_result, f, indent=2)
+                    
+                    batch_results.append(contract_result)
+                    
+                    yield f"data: {json.dumps({'type': 'contract_complete', 'contract': contract_num, 'score': composite_score.get('final_score', 0), 'grade': composite_score.get('grade', 'N/A'), 'latency': latency})}\n\n"
+                    
+                    print(f"✓ Contract {contract_num}/{sample_size} complete - Score: {composite_score.get('final_score', 0)}/100, Latency: {latency:.1f}s")
+                    
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_text_path)
+                    except:
+                        pass
+                    
+                except Exception as e:
+                    print(f"❌ Contract {contract_num} failed: {e}")
+                    yield f"data: {json.dumps({'type': 'contract_error', 'contract': contract_num, 'error': str(e)})}\n\n"
+                    
+                    # Clean up temporary file on error
+                    try:
+                        if 'temp_text_path' in locals():
+                            os.unlink(temp_text_path)
+                    except:
+                        pass
+            
+            # Calculate aggregate statistics
+            if batch_results:
+                total_contracts = len(batch_results)
+                avg_score = sum(r['final_score'] for r in batch_results) / total_contracts
+                avg_latency = sum(r['latency_seconds'] for r in batch_results) / total_contracts
+                
+                # Calculate metric averages
+                metric_averages = {
+                    'functional_completeness': sum(r['metric_scores']['functional_completeness'] for r in batch_results) / total_contracts,
+                    'variable_fidelity': sum(r['metric_scores']['variable_fidelity'] for r in batch_results) / total_contracts,
+                    'state_machine': sum(r['metric_scores']['state_machine'] for r in batch_results) / total_contracts,
+                    'business_logic': sum(r['metric_scores']['business_logic'] for r in batch_results) / total_contracts,
+                    'code_quality': sum(r['metric_scores']['code_quality'] for r in batch_results) / total_contracts
+                }
+                
+                # Grade distribution
+                grade_counts = {}
+                for result in batch_results:
+                    grade = result['grade']
+                    grade_counts[grade] = grade_counts.get(grade, 0) + 1
+                
+                # Save aggregate results
+                aggregate_results = {
+                    'batch_id': batch_id,
+                    'total_contracts': total_contracts,
+                    'timestamp': datetime.now().isoformat(),
+                    'statistics': {
+                        'average_score': avg_score,
+                        'min_score': min(r['final_score'] for r in batch_results),
+                        'max_score': max(r['final_score'] for r in batch_results),
+                        'average_latency': avg_latency,
+                        'total_time': sum(r['latency_seconds'] for r in batch_results),
+                        'metric_averages': metric_averages,
+                        'grade_distribution': grade_counts
+                    },
+                    'individual_results': [
+                        {
+                            'contract_id': r['contract_id'],
+                            'score': r['final_score'],
+                            'grade': r['grade'],
+                            'latency': r['latency_seconds'],
+                            'metrics': r['metric_scores']
+                        } for r in batch_results
+                    ]
+                }
+                
+                # Save aggregate file
+                aggregate_file = results_dir / "aggregate_results.json"
+                with open(aggregate_file, 'w') as f:
+                    json.dump(aggregate_results, f, indent=2)
+                
+                print(f"\n✓ Batch complete: {total_contracts} contracts, Avg Score: {avg_score:.1f}/100")
+                print(f"  Results saved to: {results_dir}")
+                
+                yield f"data: {json.dumps({'type': 'batch_complete', 'results': aggregate_results})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'batch_error', 'error': 'No results generated'})}\n\n"
+        
+        return Response(generate(), mimetype='text/event-stream')
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/test', methods=['GET'])
 def test():
     """Test endpoint to verify API is working"""
@@ -1268,14 +1488,15 @@ if __name__ == '__main__':
     
     print("Starting Chatbot API Server...")
     print("Available endpoints:")
-    print("  GET  /api/health          - Health check")
-    print("  GET  /api/random-contract - Get random contract from dataset")
-    print("  GET  /api/test            - Test endpoint")
+    print("  GET  /api/health           - Health check")
+    print("  GET  /api/random-contract  - Get random contract from dataset")
+    print("  POST /api/batch-translate  - Batch process multiple contracts")
+    print("  GET  /api/test             - Test endpoint")
     print("  POST /api/translate-stream - Translate contract (streaming)")
-    print("  POST /api/translate       - Translate contract PDF")
-    print("  POST /api/connect         - Connect to MCP server")
-    print("  POST /api/chat            - Send chat message")
-    print("  GET  /api/tools           - List available tools")
+    print("  POST /api/translate        - Translate contract PDF")
+    print("  POST /api/connect          - Connect to MCP server")
+    print("  POST /api/chat             - Send chat message")
+    print("  GET  /api/tools            - List available tools")
     print("\nServer running on http://localhost:5000")
     print("Press Ctrl+C to stop\n")
     
