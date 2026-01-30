@@ -81,6 +81,9 @@
       const [auditData, setAuditData] = useState(null);
       const [currentSessionId, setCurrentSessionId] = useState(null);
       const [groundTruthCode, setGroundTruthCode] = useState('');
+      
+      // View toggle state for switching between quality eval and ground truth comparison
+      const [activeView, setActiveView] = useState('quality'); // 'quality' or 'comparison'
 
       // Load contract from localStorage if available (from sampler.html)
       useEffect(() => {
@@ -215,27 +218,30 @@
                     continue; // Don't process further until user responds
                   }
 
-                  // Update UI based on phase
+                  // Update UI based on phase (ignore non-numeric phases like 'ground_truth')
                   const phaseNum = eventData.phase;
-                  setPhase(phaseNum);
+                  const isNumericPhase = typeof phaseNum === 'number';
+                  if (isNumericPhase) {
+                    setPhase(phaseNum);
 
-                  const progressMap = { 1: 20, 2: 30, 3: 45, 4: 60, 5: 75, 6: 90, 7: 100 };
-                  const titleMap = {
-                    1: 'Document Processing',
-                    2: 'Contract Analysis',
-                    3: 'Code Generation',
-                    4: 'Security Audit',
-                    5: 'ABI Generation',
-                    6: 'MCP Server Generation',
-                    7: 'Quality Evaluation'
-                  };
+                    const progressMap = { 1: 20, 2: 30, 3: 45, 4: 60, 5: 75, 6: 90, 7: 100 };
+                    const titleMap = {
+                      1: 'Document Processing',
+                      2: 'Contract Analysis',
+                      3: 'Code Generation',
+                      4: 'Security Audit',
+                      5: 'ABI Generation',
+                      6: 'MCP Server Generation',
+                      7: 'Quality Evaluation'
+                    };
 
-                  setCurrentPhaseInfo({
-                    title: titleMap[phaseNum] || `Phase ${phaseNum}`,
-                    status: '✓ Complete',
-                    output: eventData.data.message,
-                    progress: progressMap[phaseNum] || 0
-                  });
+                    setCurrentPhaseInfo({
+                      title: titleMap[phaseNum] || `Phase ${phaseNum}`,
+                      status: '✓ Complete',
+                      output: eventData.data.message,
+                      progress: progressMap[phaseNum] || 0
+                    });
+                  }
 
                   // Store generated data as we receive it
                   // Phase 2: Capture schema from Contract Analysis
@@ -522,8 +528,34 @@
             {/* Post-Generation: Download Phase */}
             {phase === 7 && (
               <div className="grid grid-cols-1 gap-8">
+                {/* View Toggle Buttons - Only show when ground truth comparison is available */}
+                {generatedData.groundTruthComparison && (
+                  <div className="flex gap-4 mb-6">
+                    <button
+                      onClick={() => setActiveView('quality')}
+                      className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
+                        activeView === 'quality'
+                          ? 'bg-purple-600 text-white border-2 border-purple-400'
+                          : 'bg-gray-800 text-gray-300 border-2 border-gray-600 hover:border-purple-400'
+                      }`}
+                    >
+                      📊 Quality Evaluation
+                    </button>
+                    <button
+                      onClick={() => setActiveView('comparison')}
+                      className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
+                        activeView === 'comparison'
+                          ? 'bg-indigo-600 text-white border-2 border-indigo-400'
+                          : 'bg-gray-800 text-gray-300 border-2 border-gray-600 hover:border-indigo-400'
+                      }`}
+                    >
+                      🔬 Ground Truth Comparison
+                    </button>
+                  </div>
+                )}
+
                 {/* Quality Evaluation Results */}
-                {generatedData.quality && (
+                {activeView === 'quality' && generatedData.quality && (
                   <div className="bg-gradient-to-br from-teal-900 to-cyan-900 rounded-2xl p-8 border-2 border-teal-500">
                     <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
                       📊 Quality Evaluation Results
@@ -659,9 +691,9 @@
               </div>
             )}
 
-            {/* Ground Truth Comparison - Independent Section */}
-            {generatedData.groundTruthComparison && generatedData.groundTruthComparison.metrics && (
-              <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 border-2 border-indigo-500 mt-6">
+            {/* Ground Truth Comparison - Independent section outside phase 7 */}
+            {activeView === 'comparison' && generatedData.groundTruthComparison && generatedData.groundTruthComparison.metrics && (
+              <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 border-2 border-indigo-500">
                 <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
                   🔬 Ground Truth Comparison
                 </h3>

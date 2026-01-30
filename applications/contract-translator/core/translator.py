@@ -844,19 +844,52 @@ class IBMAgenticContractTranslator:
                 result_raw = crew.kickoff()
                 result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
                 quality_evaluation = self._extract_json(result_text, dict)
+                
+                # Recalculate final_score to ensure correctness
+                m1 = quality_evaluation.get('metric_1_functional_completeness', {}).get('score', 0)
+                m2 = quality_evaluation.get('metric_2_variable_fidelity', {}).get('score', 0)
+                m3 = quality_evaluation.get('metric_3_state_machine', {}).get('score', 0)
+                m4 = quality_evaluation.get('metric_4_business_logic', {}).get('score', 0)
+                m5 = quality_evaluation.get('metric_5_code_quality', {}).get('score', 0)
+                
+                # Calculate weighted score: (M1 * 0.25) + (M2 * 0.15) + (M3 * 0.15) + (M4 * 0.35) + (M5 * 0.10)
+                calculated_score = (m1 * 0.25) + (m2 * 0.15) + (m3 * 0.15) + (m4 * 0.35) + (m5 * 0.10)
+                
+                # Determine grade based on calculated score
+                if calculated_score >= 90:
+                    grade = 'A'
+                elif calculated_score >= 80:
+                    grade = 'B'
+                elif calculated_score >= 70:
+                    grade = 'C'
+                elif calculated_score >= 60:
+                    grade = 'D'
+                else:
+                    grade = 'F'
+                
+                # Override composite_score with calculated values
+                quality_evaluation['composite_score'] = {
+                    'functional_completeness_weighted': round(m1 * 0.25, 2),
+                    'variable_fidelity_weighted': round(m2 * 0.15, 2),
+                    'state_machine_weighted': round(m3 * 0.15, 2),
+                    'business_logic_weighted': round(m4 * 0.35, 2),
+                    'code_quality_weighted': round(m5 * 0.10, 2),
+                    'final_score': round(calculated_score, 1),
+                    'grade': grade
+                }
+                
                 results['quality_evaluation'] = quality_evaluation
                 
                 # Print summary
-                final_score = quality_evaluation.get('composite_score', {}).get('final_score', 0)
-                grade = quality_evaluation.get('composite_score', {}).get('grade', 'N/A')
+                final_score = calculated_score
                 print(f"✓ Quality Evaluation Complete: Score={final_score:.1f}/100, Grade={grade}")
                 
                 # Print metric breakdown
-                print(f"   📊 Functional Completeness: {quality_evaluation.get('metric_1_functional_completeness', {}).get('score', 0)}/100")
-                print(f"   📊 Variable Fidelity: {quality_evaluation.get('metric_2_variable_fidelity', {}).get('score', 0)}/100")
-                print(f"   📊 State Machine Correctness: {quality_evaluation.get('metric_3_state_machine', {}).get('score', 0)}/100")
-                print(f"   📊 Business Logic Fidelity: {quality_evaluation.get('metric_4_business_logic', {}).get('score', 0)}/100")
-                print(f"   📊 Code Quality: {quality_evaluation.get('metric_5_code_quality', {}).get('score', 0)}/100")
+                print(f"   📊 Functional Completeness: {m1}/100")
+                print(f"   📊 Variable Fidelity: {m2}/100")
+                print(f"   📊 State Machine Correctness: {m3}/100")
+                print(f"   📊 Business Logic Fidelity: {m4}/100")
+                print(f"   📊 Code Quality: {m5}/100")
                 
                 # Check Solidity compilation
                 print(f"\n   🔍 Checking Solidity compilation...")
@@ -1016,19 +1049,52 @@ class IBMAgenticContractTranslator:
                 result_raw = crew.kickoff()
                 result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
                 quality_evaluation = self._extract_json(result_text, dict)
+                
+                # Recalculate final_score to ensure correctness
+                m1 = quality_evaluation.get('metric_1_functional_completeness', {}).get('score', 0)
+                m2 = quality_evaluation.get('metric_2_variable_fidelity', {}).get('score', 0)
+                m3 = quality_evaluation.get('metric_3_state_machine', {}).get('score', 0)
+                m4 = quality_evaluation.get('metric_4_business_logic', {}).get('score', 0)
+                m5 = quality_evaluation.get('metric_5_code_quality', {}).get('score', 0)
+                
+                # Calculate weighted score: (M1 * 0.25) + (M2 * 0.15) + (M3 * 0.15) + (M4 * 0.35) + (M5 * 0.10)
+                calculated_score = (m1 * 0.25) + (m2 * 0.15) + (m3 * 0.15) + (m4 * 0.35) + (m5 * 0.10)
+                
+                # Determine grade based on calculated score
+                if calculated_score >= 90:
+                    grade = 'A'
+                elif calculated_score >= 80:
+                    grade = 'B'
+                elif calculated_score >= 70:
+                    grade = 'C'
+                elif calculated_score >= 60:
+                    grade = 'D'
+                else:
+                    grade = 'F'
+                
+                # Override composite_score with calculated values
+                quality_evaluation['composite_score'] = {
+                    'functional_completeness_weighted': round(m1 * 0.25, 2),
+                    'variable_fidelity_weighted': round(m2 * 0.15, 2),
+                    'state_machine_weighted': round(m3 * 0.15, 2),
+                    'business_logic_weighted': round(m4 * 0.35, 2),
+                    'code_quality_weighted': round(m5 * 0.10, 2),
+                    'final_score': round(calculated_score, 1),
+                    'grade': grade
+                }
+                
                 results['quality_evaluation'] = quality_evaluation
                 
                 # Print summary
-                final_score = quality_evaluation.get('composite_score', {}).get('final_score', 0)
-                grade = quality_evaluation.get('composite_score', {}).get('grade', 'N/A')
+                final_score = calculated_score
                 print(f"✓ Quality Evaluation Complete: Score={final_score:.1f}/100, Grade={grade}")
                 
                 # Print metric breakdown
-                print(f"   Functional Completeness: {quality_evaluation.get('metric_1_functional_completeness', {}).get('score', 0)}/100")
-                print(f"   Variable Fidelity: {quality_evaluation.get('metric_2_variable_fidelity', {}).get('score', 0)}/100")
-                print(f"   State Machine Correctness: {quality_evaluation.get('metric_3_state_machine', {}).get('score', 0)}/100")
-                print(f"   Business Logic Fidelity: {quality_evaluation.get('metric_4_business_logic', {}).get('score', 0)}/100")
-                print(f"   Code Quality: {quality_evaluation.get('metric_5_code_quality', {}).get('score', 0)}/100")
+                print(f"   Functional Completeness: {m1}/100")
+                print(f"   Variable Fidelity: {m2}/100")
+                print(f"   State Machine Correctness: {m3}/100")
+                print(f"   Business Logic Fidelity: {m4}/100")
+                print(f"   Code Quality: {m5}/100")
                 
             except Exception as e:
                 print(f"   ⚠️  Quality evaluation failed: {e}")
@@ -1104,17 +1170,49 @@ class IBMAgenticContractTranslator:
                     "compilation_check": {"compiles": None, "error_message": "JSON parsing failed"}
                 }
             
+            # Recalculate final_score to ensure correctness
+            m1 = quality_evaluation.get('metric_1_functional_completeness', {}).get('score', 0)
+            m2 = quality_evaluation.get('metric_2_variable_fidelity', {}).get('score', 0)
+            m3 = quality_evaluation.get('metric_3_state_machine', {}).get('score', 0)
+            m4 = quality_evaluation.get('metric_4_business_logic', {}).get('score', 0)
+            m5 = quality_evaluation.get('metric_5_code_quality', {}).get('score', 0)
+            
+            # Calculate weighted score: (M1 * 0.25) + (M2 * 0.15) + (M3 * 0.15) + (M4 * 0.35) + (M5 * 0.10)
+            calculated_score = (m1 * 0.25) + (m2 * 0.15) + (m3 * 0.15) + (m4 * 0.35) + (m5 * 0.10)
+            
+            # Determine grade based on calculated score
+            if calculated_score >= 90:
+                grade = 'A'
+            elif calculated_score >= 80:
+                grade = 'B'
+            elif calculated_score >= 70:
+                grade = 'C'
+            elif calculated_score >= 60:
+                grade = 'D'
+            else:
+                grade = 'F'
+            
+            # Override composite_score with calculated values
+            quality_evaluation['composite_score'] = {
+                'functional_completeness_weighted': round(m1 * 0.25, 2),
+                'variable_fidelity_weighted': round(m2 * 0.15, 2),
+                'state_machine_weighted': round(m3 * 0.15, 2),
+                'business_logic_weighted': round(m4 * 0.35, 2),
+                'code_quality_weighted': round(m5 * 0.10, 2),
+                'final_score': round(calculated_score, 1),
+                'grade': grade
+            }
+            
             # Print summary
-            final_score = quality_evaluation.get('composite_score', {}).get('final_score', 0)
-            grade = quality_evaluation.get('composite_score', {}).get('grade', 'N/A')
+            final_score = calculated_score
             print(f"✓ Ground Truth Evaluation: Score={final_score:.1f}/100, Grade={grade}")
             
             # Print metric breakdown for ground truth (same as generated code)
-            print(f"   📊 Functional Completeness: {quality_evaluation.get('metric_1_functional_completeness', {}).get('score', 0)}/100")
-            print(f"   📊 Variable Fidelity: {quality_evaluation.get('metric_2_variable_fidelity', {}).get('score', 0)}/100")
-            print(f"   📊 State Machine Correctness: {quality_evaluation.get('metric_3_state_machine', {}).get('score', 0)}/100")
-            print(f"   📊 Business Logic Fidelity: {quality_evaluation.get('metric_4_business_logic', {}).get('score', 0)}/100")
-            print(f"   📊 Code Quality: {quality_evaluation.get('metric_5_code_quality', {}).get('score', 0)}/100")
+            print(f"   📊 Functional Completeness: {m1}/100")
+            print(f"   📊 Variable Fidelity: {m2}/100")
+            print(f"   📊 State Machine Correctness: {m3}/100")
+            print(f"   📊 Business Logic Fidelity: {m4}/100")
+            print(f"   📊 Code Quality: {m5}/100")
             
             # Check compilation
             compiler_checker = SolidityCompilationChecker()
