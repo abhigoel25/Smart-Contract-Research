@@ -902,9 +902,63 @@ def random_contract():
         }), 500
 
 
+@app.route('/api/list-batches', methods=['GET'])
+def list_batches():
+    """List all available batch processing runs with their status"""
+    try:
+        output_dir = Path(__file__).parent.parent / "contract-translator" / "output"
+        if not output_dir.exists():
+            return jsonify({"batches": []}), 200
+        
+        batches = []
+        for batch_dir in output_dir.glob("batch_*"):
+            if batch_dir.is_dir():
+                batch_id = batch_dir.name.replace("batch_", "")
+                checkpoint_file = batch_dir / "checkpoint.json"
+                
+                batch_info = {
+                    "batch_id": batch_id,
+                    "path": str(batch_dir),
+                    "has_checkpoint": checkpoint_file.exists()
+                }
+                
+                # Load checkpoint info if exists
+                if checkpoint_file.exists():
+                    try:
+                        with open(checkpoint_file, 'r') as f:
+                            checkpoint = json.load(f)
+                            batch_info.update({
+                                "total_contracts": checkpoint.get('total_contracts', 0),
+                                "processed_count": len(checkpoint.get('processed_indices', [])),
+                                "last_updated": checkpoint.get('timestamp', 'unknown'),
+                                "complete": len(checkpoint.get('processed_indices', [])) >= checkpoint.get('total_contracts', 0)
+                            })
+                    except:
+                        pass
+                
+                batches.append(batch_info)
+        
+        # Sort by batch_id (newest first)
+        batches.sort(key=lambda x: x['batch_id'], reverse=True)
+        
+        return jsonify({"batches": batches}), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "message": "Failed to list batches"
+        }), 500
+
+
 @app.route('/api/batch-translate', methods=['POST'])
 def batch_translate():
-    """Process multiple contracts in batch and return results"""
+    """Process multiple contracts in batch and return results
+    
+    Request body:
+        - num_contracts: Number of contracts to process
+        - seed: Random seed for sampling
+        - batch_id: Optional - Resume existing batch (format: YYYYMMDD_HHMMSS)
+    """
     import random
     import time
     from datetime import datetime
@@ -913,6 +967,7 @@ def batch_translate():
         data = request.json
         num_contracts = data.get('num_contracts', 100)
         seed = data.get('seed', None)
+        resume_batch_id = data.get('batch_id', None)  # For resuming
         
         print(f"\n🔄 Starting batch translation of {num_contracts} contracts...")
         
@@ -934,6 +989,9 @@ def batch_translate():
         if not contracts:
             return jsonify({"error": "No contracts in dataset"}), 404
         
+        # Will be set from checkpoint if resuming
+        original_seed = seed
+        
         # Sample contracts
         if seed is not None:
             random.seed(seed)
@@ -942,16 +1000,86 @@ def batch_translate():
         sample_contracts = random.sample(contracts, sample_size)
         
         # Create batch results directory
-        batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results_dir = Path(__file__).parent.parent / "contract-translator" / "output" / f"batch_{batch_id}"
-        results_dir.mkdir(parents=True, exist_ok=True)
+        if resume_batch_id:
+            # Resume existing batch
+            batch_id = resume_batch_id
+            results_dir = Path(__file__).parent.parent / "contract-translator" / "output" / f"batch_{batch_id}"
+            if not results_dir.exists():
+                return jsonify({"error": f"Batch {batch_id} not found"}), 404
+            print(f"📂 Resuming batch {batch_id}...")
+        else:
+            # Create new batch
+            batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+            results_dir = Path(__file__).parent.parent / "contract-translator" / "output" / f"batch_{batch_id}"
+            results_dir.mkdir(parents=True, exist_ok=True)
+            print(f"📁 Created new batch {batch_id}")
+        
+        # Checkpoint file for resuming
+        checkpoint_file = results_dir / "checkpoint.json"
+        
+        # Load checkpoint if exists
+        processed_indices = set()
+        if checkpoint_file.exists():
+            try:
+                with open(checkpoint_file, 'r') as f:
+                    checkpoint_data = json.load(f)
+                    processed_indices = set(checkpoint_data.get('processed_indices', []))
+                    batch_id = checkpoint_data.get('batch_id', batch_id)
+                    # Load original seed to ensure same contract sample
+                    saved_seed = checkpoint_data.get('seed')
+                    if saved_seed is not None:
+                        original_seed = saved_seed
+                        random.seed(original_seed)
+                        sample_contracts = random.sample(contracts, sample_size)
+                        print(f"📂 Resuming batch {batch_id} - {len(processed_indices)} contracts already processed (using original seed {original_seed})")
+                    else:
+                        print(f"📂 Resuming batch {batch_id} - {len(processed_indices)} contracts already processed")
+            except Exception as e:
+                print(f"⚠️  Could not load checkpoint: {e}")
         
         # SSE generator function
         def generate():
             batch_results = []
             
+            # Load previous results if resuming
+            if processed_indices:
+                print(f"📂 Loading {len(processed_indices)} previously processed results...")
+                for prev_idx in sorted(processed_indices):
+                    prev_contract_num = prev_idx + 1
+                    prev_contract_file = results_dir / f"contract_{prev_contract_num:03d}.json"
+                    if prev_contract_file.exists():
+                        try:
+                            with open(prev_contract_file, 'r') as f:
+                                prev_result = json.load(f)
+                                batch_results.append(prev_result)
+                        except Exception as e:
+                            print(f"⚠️  Could not load previous result for contract {prev_contract_num}: {e}")
+                print(f"✓ Loaded {len(batch_results)} previous results")
+            
+            # Save checkpoint function
+            def save_checkpoint(current_indices):
+                try:
+                    checkpoint_data = {
+                        'batch_id': batch_id,
+                        'timestamp': datetime.now().isoformat(),
+                        'processed_indices': list(current_indices),
+                        'total_contracts': sample_size,
+                        'seed': original_seed  # Save original seed for exact resume
+                    }
+                    with open(checkpoint_file, 'w') as f:
+                        json.dump(checkpoint_data, f, indent=2)
+                except Exception as e:
+                    print(f"⚠️  Failed to save checkpoint: {e}")
+            
             for idx, contract in enumerate(sample_contracts):
                 contract_num = idx + 1
+                
+                # Skip if already processed
+                if idx in processed_indices:
+                    print(f"⏭️  Skipping contract {contract_num}/{sample_size} (already processed)")
+                    yield f"data: {json.dumps({'type': 'batch_progress', 'current': contract_num, 'total': sample_size, 'status': 'skipped'})}\n\n"
+                    continue
+                
                 contract_text = contract.get('user_requirement', '')
                 
                 yield f"data: {json.dumps({'type': 'batch_progress', 'current': contract_num, 'total': sample_size, 'status': 'starting'})}\n\n"
@@ -1079,9 +1207,14 @@ def batch_translate():
                     
                     batch_results.append(contract_result)
                     
+                    # Mark as processed and save checkpoint
+                    processed_indices.add(idx)
+                    save_checkpoint(processed_indices)
+                    
                     yield f"data: {json.dumps({'type': 'contract_complete', 'contract': contract_num, 'score': composite_score.get('final_score', 0), 'grade': composite_score.get('grade', 'N/A'), 'latency': latency})}\n\n"
                     
                     print(f"✓ Contract {contract_num}/{sample_size} complete - Score: {composite_score.get('final_score', 0)}/100, Latency: {latency:.1f}s")
+                    print(f"💾 Checkpoint saved - {len(processed_indices)}/{sample_size} contracts processed")
                     
                     # Clean up temporary file
                     try:
@@ -1091,6 +1224,11 @@ def batch_translate():
                     
                 except Exception as e:
                     print(f"❌ Contract {contract_num} failed: {e}")
+                    
+                    # Still mark as processed to avoid retrying failed contracts indefinitely
+                    processed_indices.add(idx)
+                    save_checkpoint(processed_indices)
+                    
                     yield f"data: {json.dumps({'type': 'contract_error', 'contract': contract_num, 'error': str(e)})}\n\n"
                     
                     # Clean up temporary file on error
@@ -1187,15 +1325,59 @@ def batch_translate():
                 with open(aggregate_file, 'w') as f:
                     json.dump(aggregate_results, f, indent=2)
                 
+                # Save quality evaluation summary (for easy access)
+                quality_evaluation = {
+                    'batch_id': batch_id,
+                    'total_contracts': total_contracts,
+                    'timestamp': datetime.now().isoformat(),
+                    'overall_metrics': {
+                        'average_composite_score': avg_score,
+                        'min_score': min(r['final_score'] for r in batch_results),
+                        'max_score': max(r['final_score'] for r in batch_results),
+                        'average_latency': avg_latency,
+                        'total_time': sum(r['latency_seconds'] for r in batch_results)
+                    },
+                    'metric_averages': metric_averages,
+                    'grade_distribution': grade_counts,
+                    'compilation_statistics': compilation_stats,
+                    'ground_truth_comparison': ground_truth_stats
+                }
+                
+                quality_file = results_dir / "quality_evaluation.json"
+                with open(quality_file, 'w') as f:
+                    json.dump(quality_evaluation, f, indent=2)
+                
                 print(f"\n✓ Batch complete: {total_contracts} contracts, Avg Score: {avg_score:.1f}/100")
                 print(f"  Results saved to: {results_dir}")
+                print(f"  📊 Quality evaluation: {quality_file}")
+                print(f"  📋 Aggregate results: {aggregate_file}")
                 
-                yield f"data: {json.dumps({'type': 'batch_complete', 'results': aggregate_results})}\n\n"
+                # Send lightweight notification - frontend will fetch full results via API
+                yield f"data: {json.dumps({'type': 'batch_complete', 'batch_id': batch_id, 'results_file': str(aggregate_file)})}\n\n"
             else:
                 yield f"data: {json.dumps({'type': 'batch_error', 'error': 'No results generated'})}\n\n"
         
         return Response(generate(), mimetype='text/event-stream')
         
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/batch-results/<batch_id>', methods=['GET'])
+def get_batch_results(batch_id):
+    """Fetch full aggregate results for a completed batch"""
+    try:
+        results_dir = Path(__file__).parent.parent / "contract-translator" / "output" / f"batch_{batch_id}"
+        aggregate_file = results_dir / "aggregate_results.json"
+        
+        if not aggregate_file.exists():
+            return jsonify({"error": f"Batch results not found at {aggregate_file}"}), 404
+        
+        with open(aggregate_file, 'r', encoding='utf-8') as f:
+            aggregate_results = json.load(f)
+        
+        return jsonify(aggregate_results)
+    
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

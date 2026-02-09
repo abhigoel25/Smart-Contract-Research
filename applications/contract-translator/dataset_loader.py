@@ -139,8 +139,8 @@ if __name__ == "__main__":
     # Example usage
     loader = ContractDatasetLoader()
     
-    # Load first 1000 contracts
-    contracts = loader.load_contracts(max_contracts=1000)
+    # Load first 1500 contracts
+    contracts = loader.load_contracts(max_contracts=1500)
     print(f"\nTotal contracts loaded: {len(contracts)}")
     
     # Get a sample of 100

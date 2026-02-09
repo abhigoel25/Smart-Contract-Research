@@ -1,0 +1,1 @@
+[{"inputs":[],"name":"getVersion","outputs":[{"internalType":"uint256","name":"version","type":"uint256"}],"stateMutability":"pure","type":"function"}]

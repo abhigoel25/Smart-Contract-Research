@@ -1,0 +1,1 @@
+[{"inputs":[{"internalType":"uint8","name":"_priceFeedId","type":"uint8"}],"name":"getLatestPrice","outputs":[{"internalType":"int256","name":"","type":"int256"}],"stateMutability":"view","type":"function"}]

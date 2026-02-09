@@ -1,0 +1,1 @@
+[{"inputs":[],"name":"getGlobalKey","outputs":[{"internalType":"address","name":"key","type":"address"}],"stateMutability":"view","type":"function"}]

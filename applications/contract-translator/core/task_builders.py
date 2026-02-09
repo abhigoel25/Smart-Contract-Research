@@ -1714,14 +1714,43 @@ Return ONLY valid JSON (no markdown, no explanation):
   }},
   
   "summary": {{
-    "strengths": ["top 3-5 things done well"],
-    "weaknesses": ["top 3-5 issues found"],
-    "critical_gaps": ["must-fix issues"],
-    "recommendation": "ACCEPT|REVISE|REJECT with rationale"
+    "strengths": [
+      "For EACH metric that scored >75, provide specific detail: 'Metric X (Score Y): [specific achievement with evidence/line numbers]'",
+      "Examples: 'Functional Completeness (87): All 5 required functions implemented with proper signatures (lines 45-120)'",
+      "'Variable Fidelity (92): Excellent mapping - all 7 state variables match specification types (address seller at line 12, uint256 price at line 15)'",
+      "'State Machine (81): Clear 3-state lifecycle (Created→Active→Completed) with proper guards on state transitions'",
+      "'Business Logic (78): Financial calculations correctly implement payment split logic (lines 89-95)'",
+      "'Code Quality (88): Zero placeholders found, all 12 require statements have descriptive error messages'"
+    ],
+    "weaknesses": [
+      "For EACH metric that scored <75, provide specific issues: 'Metric X (Score Y): [specific problem with evidence/line numbers]'",
+      "Examples: 'Functional Completeness (62): Missing 2 of 5 required functions (refundBuyer, cancelOrder not implemented)'",
+      "'Variable Fidelity (58): 4 critical variables missing - no deliveryDeadline, escrowAmount, or dispute-related state variables'",
+      "'State Machine (45): No state variable defined - contract lacks lifecycle management, transitions unguarded'",
+      "'Business Logic (51): No obligation implementation - missing payment logic, no temporal conditions for deadlines (spec requires 30-day timeout)'",
+      "'Code Quality (38): Found 5 TODO placeholders (lines 67, 89, 102, 145, 178), 8 of 15 requires missing error messages'"
+    ],
+    "critical_gaps": [
+      "Must-fix issues that directly impact contract usability/security",
+      "Reference specific metric scores and line numbers",
+      "Examples: 'Security: No access control on critical functions (lines 45-67) - Business Logic metric affected (scored 42)'",
+      "'Missing core functionality: Payment escrow not implemented - Functional Completeness scored only 55'"
+    ],
+    "recommendation": "ACCEPT|REVISE|REJECT with rationale explaining which metrics need improvement"
   }}
 }}
 
-CRITICAL INSTRUCTIONS:
+CRITICAL INSTRUCTIONS FOR SUMMARY SECTION:
+1. Strengths MUST reference specific metrics by name and their scores (e.g., "Functional Completeness (85)")
+2. Weaknesses MUST reference specific metrics by name and their scores (e.g., "State Machine (62)")
+3. For weaknesses, be VERY specific: cite line numbers, name missing elements, quantify gaps
+4. Strengths should highlight concrete achievements with evidence (e.g., "all 7 functions implemented", "proper error handling on 15/15 requires")
+5. DO NOT use generic statements like "No financial logic" - instead say "Business Logic (51): Payment calculation missing (spec lines 23-28 require escrow handling), no withdrawal function implemented"
+6. Every strength/weakness should directly map to one of the 5 metrics and explain WHY that metric scored high or low
+7. Include line numbers wherever possible for both strengths and weaknesses
+8. Critical gaps should identify security issues, missing core functionality, or specification violations
+
+SCORING INSTRUCTIONS:
 1. Be thorough but objective - cite specific evidence
 2. Use line numbers when referencing code
 3. Compare implementation to specification systematically

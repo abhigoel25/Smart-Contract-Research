@@ -192,11 +192,21 @@
     <div class="batch-controls">
         <h2>Batch Processing Mode</h2>
         <p>Process multiple contracts through the 7-phase translation pipeline and get aggregate quality metrics.</p>
-        <div>
+        <div style="margin-bottom: 15px;">
             <label for="numContracts" style="color: #fff;">Number of contracts:</label>
-            <input type="number" id="numContracts" min="1" max="500" value="10" />
+            <input type="number" id="numContracts" min="1" max="1500" value="10" />
             <button id="startBatchBtn" onclick="startBatchProcessing()">Start Batch Processing</button>
             <button id="stopBatchBtn" onclick="stopBatchProcessing()" style="display:none; background: #ff6b6b;">Stop Processing</button>
+        </div>
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #00d4ff33;">
+            <label for="resumeBatchId" style="color: #fff;">Resume batch (optional):</label>
+            <input type="text" id="resumeBatchId" placeholder="batch_20260202_234755" style="width: 300px;" />
+            <button onclick="startBatchProcessing(document.getElementById('resumeBatchId').value)">Resume Batch</button>
+        </div>
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #00d4ff33;">
+            <label for="loadBatchId" style="color: #fff;">Load completed batch results:</label>
+            <input type="text" id="loadBatchId" placeholder="20260202_234755" style="width: 300px;" />
+            <button onclick="loadBatchResults(document.getElementById('loadBatchId').value)">Load Results</button>
         </div>
     </div>
 
@@ -351,7 +361,11 @@
     <script>
         let currentContract = null;
         let batchEventSource = null;
-        let batchResults = null;
+        let batchResults = {
+            contracts: [],
+            aggregate: null,
+            statistics: {}
+        };
         let charts = {};
 
         // Single Contract Functions
@@ -441,15 +455,18 @@
         }
 
         // Batch Processing Functions
-        function startBatchProcessing() {
+        function startBatchProcessing(resumeBatchId = null) {
             const numContracts = parseInt(document.getElementById('numContracts').value);
             
-            if (numContracts < 1 || numContracts > 500) {
-                alert('Please enter a number between 1 and 500');
+            if (numContracts < 1 || numContracts > 1500) {
+                alert('Please enter a number between 1 and 1500');
                 return;
             }
 
             console.log(`Starting batch processing of ${numContracts} contracts...`);
+            if (resumeBatchId) {
+                console.log(`Resuming batch: ${resumeBatchId}`);
+            }
             
             // Show progress, hide results
             document.getElementById('batchProgress').style.display = 'block';
@@ -460,7 +477,7 @@
             // Reset progress
             document.getElementById('progressFill').style.width = '0%';
             document.getElementById('progressFill').textContent = '0%';
-            document.getElementById('progressText').textContent = 'Starting batch processing...';
+            document.getElementById('progressText').textContent = resumeBatchId ? 'Resuming batch from checkpoint...' : 'Starting batch processing...';
             
             // Initialize results storage
             batchResults = {
@@ -468,16 +485,24 @@
                 statistics: {}
             };
             
+            // Prepare request body
+            const requestBody = {
+                num_contracts: numContracts,
+                seed: Date.now()
+            };
+            
+            // Add batch_id if resuming
+            if (resumeBatchId && resumeBatchId.trim()) {
+                requestBody.batch_id = resumeBatchId.trim();
+            }
+            
             // Use fetch with SSE
             fetch('http://localhost:5000/api/batch-translate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    num_contracts: numContracts,
-                    seed: Date.now()
-                })
+                body: JSON.stringify(requestBody)
             }).then(response => {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -519,7 +544,14 @@
                 const progress = (event.current / event.total) * 100;
                 document.getElementById('progressFill').style.width = progress + '%';
                 document.getElementById('progressFill').textContent = Math.round(progress) + '%';
-                document.getElementById('progressText').textContent = `Processing contract ${event.current} of ${event.total}...`;
+                
+                // Show different message for skipped contracts
+                if (event.status === 'skipped') {
+                    document.getElementById('progressText').textContent = `⏭️ Skipping contract ${event.current} of ${event.total} (already processed)`;
+                    console.log(`⏭️ Skipped contract ${event.current} (already completed)`);
+                } else {
+                    document.getElementById('progressText').textContent = `Processing contract ${event.current} of ${event.total}...`;
+                }
             }
             else if (type === 'contract_phase') {
                 const phaseNames = ['', 'Document Processing', 'Contract Analysis', 'Code Generation', 
@@ -542,9 +574,19 @@
                 console.error(`Contract ${event.contract} error:`, event.error);
             }
             else if (type === 'batch_complete') {
-                console.log('Batch processing complete!', event.results);
-                batchResults.aggregate = event.results;
-                displayBatchResults();
+                console.log('Batch processing complete! Fetching full results...');
+                // Fetch full aggregate results via API (SSE payload was too large)
+                fetch(`http://localhost:5000/api/batch-results/${event.batch_id}`)
+                    .then(response => response.json())
+                    .then(results => {
+                        console.log('Full results loaded:', results);
+                        batchResults.aggregate = results;
+                        displayBatchResults();
+                    })
+                    .catch(error => {
+                        console.error('Error fetching batch results:', error);
+                        alert('Failed to load batch results. Check console for details.');
+                    });
             }
         }
 
@@ -554,6 +596,34 @@
                 batchEventSource = null;
             }
             finalizeBatch();
+        }
+
+        function loadBatchResults(batchId) {
+            if (!batchId || !batchId.trim()) {
+                alert('Please enter a batch ID (e.g., 20260202_234755)');
+                return;
+            }
+            
+            batchId = batchId.trim().replace('batch_', ''); // Remove batch_ prefix if present
+            
+            console.log(`Loading results for batch ${batchId}...`);
+            
+            fetch(`http://localhost:5000/api/batch-results/${batchId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Batch not found: ${batchId}`);
+                    }
+                    return response.json();
+                })
+                .then(results => {
+                    console.log('Batch results loaded:', results);
+                    batchResults.aggregate = results;
+                    displayBatchResults();
+                })
+                .catch(error => {
+                    console.error('Error loading batch results:', error);
+                    alert(`Failed to load batch results: ${error.message}`);
+                });
         }
 
         function finalizeBatch() {
