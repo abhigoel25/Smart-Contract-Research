@@ -14,9 +14,34 @@ Program classes:
 
 import json
 from typing import Dict, List
-from agentics import LLM, Program, user_message, system_message
 from .schemas import UniversalContractSchema
-from .task_builders import create_solidity_generation_prompt
+
+# agentics.LLM / Program / message helpers were removed in agentics >=2.
+# Provide minimal stubs so the module imports cleanly; the legacy forward()
+# methods will raise NotImplementedError if actually called.
+try:
+    from agentics import LLM, Program, user_message, system_message  # type: ignore
+except ImportError:
+    class LLM:  # type: ignore
+        def __init__(self, model: str = "gpt-4o-mini", **kw): self.model = model
+
+    class Program:  # type: ignore
+        def forward(self, *a, **kw):
+            raise NotImplementedError(
+                "Legacy agentics.Program API is not available in this environment. "
+                "Use the CrewAI agent pipeline instead."
+            )
+
+    def user_message(content: str, **kw) -> dict:    # type: ignore
+        return {"role": "user",   "content": content}
+
+    def system_message(content: str, **kw) -> dict:  # type: ignore
+        return {"role": "system", "content": content}
+from .task_builders import (
+    create_solidity_generation_prompt,
+    create_audit_task_description,
+    create_abi_generator_task_description,
+)
 
 
 # Note: This file is auto-generated from agentic_implementation.py refactoring
@@ -77,6 +102,7 @@ PAY CLOSE ATTENTION TO:
 4. **State Transitions**: Capture the EXACT transition logic (e.g., "Initializing → Active when lease starts")
 5. **Specific Conditions**: Extract the EXACT conditions mentioned (e.g., "rent must be paid by day 5 of each month")
 6. **Specific Events**: If events are mentioned like "LeaseInitialized", "RentPaid", extract those EXACT names
+7. **Obligations**: For smart contracts, EVERY described function or operation is an obligation. Map each to: party = who is authorized to call it (e.g. "token holder", "owner"), description = what it does on-chain. NEVER leave obligations empty when functions are described.
 
 Return ONLY valid JSON with this structure:
 {{
@@ -119,12 +145,22 @@ Return ONLY valid JSON with this structure:
     ],
     "obligations": [
         {{
-            "party": "EXACT party name",
-            "description": "EXACT obligation as written",
-            "deadline": "EXACT deadline if mentioned",
-            "penalty_for_breach": "EXACT penalty if mentioned"
+            "party": "WHO performs or is authorized to call this (e.g. 'token holder', 'contract owner', 'buyer', 'tenant')",
+            "description": "WHAT they must/can do - map EVERY described function or operation to an obligation here",
+            "deadline": "EXACT deadline if mentioned, else null",
+            "penalty_for_breach": "EXACT penalty if mentioned, else null"
         }}
     ],
+
+CRITICAL FOR OBLIGATIONS: For smart contracts, EVERY described function or operation IS an obligation.
+Do NOT leave this array empty if functions are described.
+For each function/operation mentioned, create one obligation entry:
+  - party = the role authorized to call it (e.g. 'token holder', 'owner', 'spender', 'buyer')
+  - description = what the operation does on-chain (e.g. 'transfer tokens to another address')
+Example: if contract mentions 'transferring tokens' and 'approving spenders', extract:
+  {{"party": "token holder", "description": "transfer tokens to any address", "deadline": null, "penalty_for_breach": null}}
+  {{"party": "token holder", "description": "approve a spender to transfer tokens on their behalf", "deadline": null, "penalty_for_breach": null}}
+
     "special_terms": ["EXACT special conditions word-for-word"],
     "conditions": {{
         "function_names": ["EXACT function names from contract: initializeLease, payRent, etc"],
@@ -137,7 +173,8 @@ Return ONLY valid JSON with this structure:
     "termination_conditions": ["EXACT termination conditions from contract"]
 }}
 
-EXTRACT EVERYTHING SPECIFIC - DO NOT USE GENERIC NAMES OR PLACEHOLDERS."""
+EXTRACT EVERYTHING SPECIFIC - DO NOT USE GENERIC NAMES OR PLACEHOLDERS.
+OBLIGATIONS MUST NOT BE EMPTY if any functions or operations are described."""
             )
         ]
         
@@ -205,16 +242,20 @@ class UniversalSolidityGeneratorProgram(Program):
         
         messages = [
             system_message(
-                """You are a Solidity expert who generates COMPLETE, FUNCTIONAL smart contracts.
-                
-                Follow ALL instructions in the prompt carefully, including:
-                - Complete Phase 1 semantic analysis before writing code
-                - Follow all 12 critical generation rules
-                - Avoid all forbidden patterns
-                - Follow correct implementation patterns
-                - Complete all checklist items before finalizing
-                
-                Return ONLY complete, production-ready Solidity code with NO placeholders."""
+                """You are an expert Solidity engineer. Your sole job is to implement the contract specification given to you.
+
+CRITICAL RULES (violating any of these means you have failed):
+- Return ONLY raw Solidity code — no markdown fences, no explanation text
+- Every function body must contain real logic: require() checks, state changes, value transfers, event emissions
+- No empty functions, no TODO comments, no placeholder logic
+- Every state variable must be written by at least one function and read by at least one function
+- Every obligation listed in the spec must become a complete function with full on-chain logic
+- If the spec is a token contract, implement the FULL ERC20 interface
+- If the spec has temporal deadlines, enforce them with require(block.timestamp ...)
+- Access control modifiers must use require() that actually reverts on failure
+- Length target: 150-400 lines — a correct 300-line contract is far better than a 60-line stub
+
+Read every line of the specification prompt. The MANDATORY sections are mandatory. Do not skip any."""
             ),
             user_message(prompt)
         ]
@@ -589,24 +630,18 @@ class SecurityAuditorProgram(Program):
         
         messages = [
             system_message(
-                "You are a blockchain security expert. "
-                "Audit smart contracts for vulnerabilities and provide detailed reports."
+                """You are a blockchain security expert specializing in Solidity smart contract auditing.
+
+CRITICAL RULES:
+- Return ONLY valid JSON — no markdown fences, no explanations
+- Every issue MUST reference a specific function name and describe the exact exploit path
+- severity_level must be one of: none, low, medium, high, critical
+- approved must be true only if severity is none or low
+- security_score: A=no issues, B=low only, C=medium, D=high, F=critical
+- vulnerability_count must equal the exact number of items in the issues array
+- recommendations must be specific line-level fixes, not generic advice"""
             ),
-            user_message(
-                f"""Audit this contract for security issues:
-
-{solidity_code}
-
-Return ONLY valid JSON:
-{{
-    "severity_level": "none|low|medium|high",
-    "approved": boolean,
-    "issues": ["list of issues"],
-    "recommendations": ["improvements"],
-    "vulnerability_count": number,
-    "security_score": "A|B|C|D|F"
-}}"""
-            )
+            user_message(create_audit_task_description(solidity_code))
         ]
         
         response = lm.chat(messages=messages)
@@ -629,17 +664,17 @@ class ABIGeneratorProgram(Program):
         
         messages = [
             system_message(
-                "You are an Ethereum ABI expert. "
-                "Generate accurate ABI specifications from Solidity contracts."
+                """You are an Ethereum ABI expert generating complete, accurate ABI JSON from Solidity contracts.
+
+CRITICAL RULES:
+- Return ONLY the JSON array — no markdown fences, no explanations
+- Include EVERY public/external function, EVERY event, and the constructor
+- Types must be exact Solidity types: uint256 (not uint), address, bool, string, bytes32, etc.
+- stateMutability must be correct: pure/view/payable/nonpayable
+- Indexed event parameters must have "indexed": true
+- Preserve all parameter names exactly as in the source code"""
             ),
-            user_message(
-                f"""Generate complete ABI for:
-
-{solidity_code}
-
-Include constructor, all functions, and events with correct types.
-Return ONLY the JSON array."""
-            )
+            user_message(create_abi_generator_task_description(solidity_code))
         ]
         
         response = lm.chat(messages=messages)

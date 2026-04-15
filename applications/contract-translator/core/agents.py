@@ -19,7 +19,7 @@ from crewai import Agent, LLM as CrewLLM
 
 
 # Default maximum refinement iterations for the reinforcement loop
-DEFAULT_MAX_REFINEMENT_ITERATIONS = 1
+DEFAULT_MAX_REFINEMENT_ITERATIONS = 2
 
 
 def _convert_to_crew_llm(agentics_llm) -> CrewLLM:
@@ -56,11 +56,18 @@ def create_agents(crew_llm: CrewLLM, enable_reinforcement: bool = True) -> dict:
     # Phase 2: Contract Parser Agent
     parser_agent = Agent(
         role="Contract Analysis Expert",
-        goal="Extract precise, specific information from legal contracts",
+        goal=(
+            "Extract every specific term, function name, variable name, state name, party role, "
+            "financial amount, and obligation from the contract text exactly as written. "
+            "Produce a fully-populated UniversalContractSchema JSON object with no generic placeholders "
+            "and with obligations NEVER empty when functions or operations are described."
+        ),
         backstory=(
-            "You are an expert contract analyst specializing in extracting exact terminology, "
-            "function names, variable names, states, and conditions from legal documents. "
-            "You never use generic placeholders - only specific terms from the contract."
+            "You are an expert contract analyst who reads every sentence of a contract carefully. "
+            "You extract EXACT terminology — if the contract says 'initializeLease' you write 'initializeLease', "
+            "not 'initialize'. You map every described operation to an obligation with the correct authorized party. "
+            "You never leave the obligations array empty when functions are described. "
+            "You always produce valid JSON in the exact schema structure requested."
         ),
         llm=crew_llm,
         verbose=False,
@@ -69,14 +76,25 @@ def create_agents(crew_llm: CrewLLM, enable_reinforcement: bool = True) -> dict:
     
     # Phase 3: Solidity Generator Agent
     generator_agent = Agent(
-        role="Solidity Smart Contract Developer",
-        goal="Generate complete, production-ready Solidity smart contracts",
+        role="Senior Solidity Smart Contract Engineer",
+        goal=(
+            "Implement the EXACT contract specification provided in the task. "
+            "Read every MANDATORY requirement, every listed obligation, and every domain-specific rule, "
+            "then implement each one completely with real on-chain logic. "
+            "Produce a contract of 150-400 lines that fully and correctly satisfies the specification."
+        ),
         backstory=(
-            "You are a Solidity expert who generates COMPLETE, FUNCTIONAL smart contracts. "
-            "You implement every function with full logic, use require() for validation, "
-            "implement proper access control, and ensure all variables are actively used. "
-            "You never write placeholder code or empty functions." 
-            "Identify the core invariants implied by the specification (e.g., conservation of funds, supply limits, exclusivity of states, fairness between parties) and ensure they cannot be violated by calling functions in any order or combination."
+            "You are a senior Solidity engineer with deep expertise in DeFi, tokens, governance, escrow, "
+            "and marketplace contracts. You read every instruction in the task description carefully and "
+            "implement every requirement with complete, production-quality code. "
+            "You NEVER write empty functions, placeholder comments, or stub implementations. "
+            "For every function you write, you ask: what real-world operation does this represent, "
+            "what invariant must hold before and after, and what can go wrong? "
+            "You enforce economic invariants (token supply conservation, escrow balance accounting), "
+            "temporal logic (deadlines enforced with require(block.timestamp ...)), "
+            "and access control (every sensitive function has a require()-backed modifier). "
+            "Your contracts are long, complete, and correct — a 300-line correct contract is "
+            "far better to you than a 60-line stub."
         ),
         llm=crew_llm,
         verbose=False,
@@ -86,12 +104,19 @@ def create_agents(crew_llm: CrewLLM, enable_reinforcement: bool = True) -> dict:
     # Phase 4: Security Auditor Agent
     auditor_agent = Agent(
         role="Blockchain Security Auditor",
-        goal="Identify security vulnerabilities in smart contracts",
+        goal=(
+            "Identify every exploitable vulnerability in the Solidity contract. "
+            "For each issue, name the specific function affected and describe the exact exploit path. "
+            "Provide severity_level, approved boolean, issues array, recommendations array with "
+            "line-level fixes, vulnerability_count, and security_score in valid JSON."
+        ),
         backstory=(
-            "You are a blockchain security expert who audits smart contracts for vulnerabilities. "
-            "You check for reentrancy, access control issues, integer overflow, and other common exploits. "
-            "You provide severity ratings (none/low/medium/high/critical) based on exploitability and impact. "
-            "You give specific line references and concrete remediation steps, not generic advice."
+            "You are a blockchain security expert specializing in Solidity smart contract audits. "
+            "You methodically check for reentrancy, access control gaps, integer overflow, "
+            "timestamp manipulation, locked ether, unbounded loops, and input validation failures. "
+            "Every issue you report names a specific function and explains how an attacker could exploit it. "
+            "Every recommendation is a concrete code-level fix, not generic advice. "
+            "You return only valid JSON — no markdown, no prose."
         ),
         llm=crew_llm,
         verbose=False,
@@ -101,10 +126,18 @@ def create_agents(crew_llm: CrewLLM, enable_reinforcement: bool = True) -> dict:
     # Phase 5: ABI Generator Agent
     abi_agent = Agent(
         role="Ethereum ABI Specialist",
-        goal="Generate accurate ABI specifications from Solidity contracts",
+        goal=(
+            "Generate the complete, accurate ABI JSON array for the given Solidity contract. "
+            "Include every public/external function with correct inputs, outputs, and stateMutability; "
+            "every event with all parameters and indexed flags; and the constructor. "
+            "Types must be exact Solidity types (uint256 not uint). Return ONLY the JSON array."
+        ),
         backstory=(
-            "You are an Ethereum ABI expert who generates complete, accurate ABI JSON "
-            "from Solidity contracts, including all functions, events, and constructor details."
+            "You are an Ethereum developer who has spent years generating and validating ABI specifications. "
+            "You know that 'uint' must be 'uint256', that view functions have no state mutations, "
+            "that payable functions have stateMutability='payable', and that indexed event parameters "
+            "must carry \"indexed\": true. You include every public/external function — never miss one. "
+            "You preserve parameter names exactly. You return only the raw JSON array — no markdown fences, no prose."
         ),
         llm=crew_llm,
         verbose=False,
@@ -128,14 +161,20 @@ def create_agents(crew_llm: CrewLLM, enable_reinforcement: bool = True) -> dict:
     # Phase 7: Quality Evaluator Agent
     quality_evaluator_agent = Agent(
         role="Smart Contract Quality Analyst",
-        goal="Comprehensively evaluate generated smart contracts against natural language specifications",
+        goal=(
+            "Score the generated Solidity contract across five metrics (functional completeness, "
+            "variable fidelity, state machine correctness, business logic fidelity, code quality). "
+            "Produce precise integer scores based on exact point calculations — never round to the nearest 5. "
+            "Return only valid JSON with metric_1 through metric_5 objects and a composite_score."
+        ),
         backstory=(
-            "You are an expert smart contract quality analyst specializing in evaluating how well "
-            "generated Solidity code implements natural language contract specifications. "
-            "You systematically assess functional completeness, variable fidelity, state machine correctness, "
-            "business logic implementation, and code quality. You provide detailed scoring with specific "
-            "evidence from the code and specification, identifying what was implemented correctly and what is missing. "
-            "You are thorough, objective, and provide actionable feedback with exact line references."
+            "You are an expert smart contract quality analyst who evaluates generated Solidity code "
+            "against natural language specifications. You read the specification line by line, "
+            "then inspect the code and assign scores based on exact evidence — counting matched functions, "
+            "checking that variables are written and read, verifying state transitions are reachable, "
+            "and confirming economic invariants are enforced. "
+            "Your scores are precise (73 not 75) because you show the arithmetic. "
+            "You return only valid JSON — no markdown, no prose — with the exact keys required."
         ),
         llm=crew_llm,
         verbose=False,

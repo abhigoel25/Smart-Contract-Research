@@ -9,15 +9,34 @@ from typing import Dict, List
 import PyPDF2
 from crewai import Agent, Task, Crew
 
-from agentics import LLM
+# agentics.LLM is only needed as a lightweight model-name holder before
+# _convert_to_crew_llm wraps it.  Import it if available; fall back to a
+# minimal stub so the module loads when the old IBM Agentics API is absent.
+try:
+    from agentics import LLM  # type: ignore
+except ImportError:
+    class LLM:  # type: ignore
+        """Minimal stub replacing agentics.LLM when the package lacks it."""
+        def __init__(self, model: str = "gpt-4o-mini", **kwargs):
+            self.model = model
+        def chat(self, messages: list, **kwargs) -> str:
+            """Direct OpenAI fallback so legacy Program.forward() still works."""
+            import openai
+            client = openai.OpenAI()
+            resp = client.chat.completions.create(model=self.model, messages=messages)
+            return resp.choices[0].message.content
 from .schemas import UniversalContractSchema
-from .programs import (
-    UniversalContractParserProgram,
-    UniversalSolidityGeneratorProgram,
-    SecurityAuditorProgram,
-    ABIGeneratorProgram,
-    MCPServerGeneratorProgram
-)
+try:
+    from .programs import (
+        UniversalContractParserProgram,
+        UniversalSolidityGeneratorProgram,
+        SecurityAuditorProgram,
+        ABIGeneratorProgram,
+        MCPServerGeneratorProgram,
+    )
+    _programs_available = True
+except ImportError:
+    _programs_available = False
 from .task_builders import (
     create_parser_task_description,
     create_solidity_generator_task_description,
@@ -72,11 +91,16 @@ class IBMAgenticContractTranslator:
         print("🤖 Initializing Agentic Pipeline with Agents...")
         
         # Keep legacy Program instances for backward compatibility
-        self.parser = UniversalContractParserProgram()
-        self.generator = UniversalSolidityGeneratorProgram()
-        self.auditor = SecurityAuditorProgram()
-        self.abi_generator = ABIGeneratorProgram()
-        self.mcp_generator = MCPServerGeneratorProgram()
+        # (only available when agentics legacy API is installed)
+        if _programs_available:
+            self.parser         = UniversalContractParserProgram()
+            self.generator      = UniversalSolidityGeneratorProgram()
+            self.auditor        = SecurityAuditorProgram()
+            self.abi_generator  = ABIGeneratorProgram()
+            self.mcp_generator  = MCPServerGeneratorProgram()
+        else:
+            self.parser = self.generator = self.auditor = None
+            self.abi_generator = self.mcp_generator = None
         
         # Create specialized agents for each phase
         self._create_agents()
@@ -249,7 +273,17 @@ class IBMAgenticContractTranslator:
         
         task_parse = Task(
             description=create_parser_task_description(contract_text),
-            expected_output="JSON object representing the parsed contract schema with exact names",
+            expected_output=(
+                "Valid JSON object matching the UniversalContractSchema structure. "
+                "MUST contain: contract_type string, parties array (each with name and role), "
+                "financial_terms array (each with amount, currency, purpose), "
+                "dates array (each with date_type), assets array, "
+                "obligations array — NEVER EMPTY if functions are described (each with party and description), "
+                "special_terms array, conditions dict with keys: function_names, variable_names, "
+                "state_names, state_transitions, events, logic_conditions; "
+                "and termination_conditions array. "
+                "Use EXACT terminology from the contract text — no generic placeholders."
+            ),
             agent=self.parser_agent
         )
         
@@ -301,7 +335,8 @@ class IBMAgenticContractTranslator:
             
             schema = UniversalContractSchema(**parsed_json)
             results['schema'] = schema
-            print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            _conds = schema.conditions if schema.conditions else {}
+            print(f"✓ Parsed: {len(_conds.get('state_names', []))} states, {len(_conds.get('events', []))} events, {len(_conds.get('function_names', []))} functions, {len(schema.obligations)} obligations")
             
         except Exception as e:
             print(f"⚠️ Error parsing schema: {e}")
@@ -314,7 +349,13 @@ class IBMAgenticContractTranslator:
         
         task_generate = Task(
             description=create_solidity_generator_task_description(schema),
-            expected_output="Complete Solidity smart contract code (^0.8.0)",
+            expected_output=(
+                "Raw Solidity ^0.8.0 source code — NO markdown fences, NO explanation text. "
+                "The contract MUST implement every obligation, function, state, and rule listed in the task description. "
+                "Every MANDATORY section (TOKEN CONTRACT, GOVERNANCE, ESCROW, etc.) must be fully implemented if present. "
+                "Target 150-400 lines. A correct 300-line contract is far better than a 60-line stub. "
+                "Every function must contain complete logic: require() checks, state changes, value transfers, events."
+            ),
             agent=self.generator_agent
         )
         
@@ -341,7 +382,16 @@ class IBMAgenticContractTranslator:
         
         task_audit = Task(
             description=create_audit_task_description(solidity_code),
-            expected_output="JSON object with security audit results",
+            expected_output=(
+                "Valid JSON object with exactly these keys: "
+                "severity_level (none/low/medium/high/critical), "
+                "approved (boolean, true only if severity is none or low), "
+                "issues (array — every item must name a specific function and describe the exploit path), "
+                "recommendations (array of specific line-level fixes, not generic advice), "
+                "vulnerability_count (integer matching issues array length), "
+                "security_score (A=none, B=low, C=medium, D=high, F=critical). "
+                "Return ONLY the JSON object — no markdown, no prose."
+            ),
             agent=self.auditor_agent
         )
         
@@ -386,7 +436,13 @@ class IBMAgenticContractTranslator:
             # Create refinement task based on audit findings
             task_refine = Task(
                 description=create_refinement_task_description(solidity_code, audit_report),
-                expected_output="Fixed Solidity smart contract code with all vulnerabilities addressed",
+                expected_output=(
+                    "Raw Solidity ^0.8.0 source code — NO markdown fences, NO explanation text. "
+                    "Every vulnerability listed in the audit MUST be fixed. "
+                    "Apply Checks-Effects-Interactions: state changes MUST come before external calls. "
+                    "Add reentrancy guards (bool locked pattern) on all functions making external calls. "
+                    "All inputs validated with require(). All original function names and business logic preserved."
+                ),
                 agent=self.refiner_agent
             )
             
@@ -414,7 +470,16 @@ class IBMAgenticContractTranslator:
             
             task_re_audit = Task(
                 description=create_audit_task_description(solidity_code),
-                expected_output="JSON object with security audit results",
+                expected_output=(
+                    "Valid JSON object with exactly these keys: "
+                    "severity_level (none/low/medium/high/critical), "
+                    "approved (boolean, true only if severity is none or low), "
+                    "issues (array — every item must name a specific function and describe the exploit path), "
+                    "recommendations (array of specific line-level fixes, not generic advice), "
+                    "vulnerability_count (integer matching issues array length), "
+                    "security_score (A=none, B=low, C=medium, D=high, F=critical). "
+                    "Return ONLY the JSON object — no markdown, no prose."
+                ),
                 agent=self.auditor_agent
             )
             
@@ -458,7 +523,14 @@ class IBMAgenticContractTranslator:
         
         task_abi = Task(
             description=create_abi_generator_task_description(solidity_code),
-            expected_output="JSON array representing the contract ABI",
+            expected_output=(
+                "Valid JSON array of ABI elements — NO markdown fences, NO explanation text. "
+                "MUST include: constructor entry with correct input types and stateMutability, "
+                "every public/external function with correct inputs, outputs, and stateMutability "
+                "(pure/view/payable/nonpayable), every event with all parameters and indexed flags. "
+                "Types must be exact Solidity types (uint256 not uint). "
+                "Parameter names must be preserved exactly as in the source code."
+            ),
             agent=self.abi_agent
         )
         
@@ -558,7 +630,18 @@ class IBMAgenticContractTranslator:
             # Phase 2: Contract Analysis (Parser Agent)
             print("\n[Phase 2/7] Contract Analysis (Parser Agent)")
             task_desc = create_parser_task_description(contract_text)
-            task = Task(description=task_desc, expected_output="JSON schema", agent=self.parser_agent)
+            task = Task(
+                description=task_desc,
+                expected_output=(
+                    "Valid JSON object matching the UniversalContractSchema structure. "
+                    "MUST contain: contract_type, parties (name+role), financial_terms (amount+currency+purpose), "
+                    "dates (date_type), assets, obligations (NEVER EMPTY if functions described — party+description), "
+                    "special_terms, conditions dict (function_names, variable_names, state_names, state_transitions, "
+                    "events, logic_conditions), termination_conditions. "
+                    "Use EXACT terminology from the contract — no generic placeholders."
+                ),
+                agent=self.parser_agent
+            )
             crew = Crew(agents=[self.parser_agent], tasks=[task], verbose=False)
             
             try:
@@ -566,7 +649,8 @@ class IBMAgenticContractTranslator:
                 result_text = str(result_raw.raw) if hasattr(result_raw, 'raw') else str(result_raw)
                 schema = self._extract_json(result_text, UniversalContractSchema)
                 results['schema'] = schema
-                print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+                _conds = schema.conditions if schema.conditions else {}
+                print(f"✓ Parsed: {len(_conds.get('state_names', []))} states, {len(_conds.get('events', []))} events, {len(_conds.get('function_names', []))} functions, {len(schema.obligations)} obligations")
             except Exception as e:
                 print(f"   ⚠️  Agent approach failed, using fallback Program: {e}")
                 schema = self.parser.forward(contract_text, self.llm)
@@ -652,7 +736,17 @@ class IBMAgenticContractTranslator:
             # Phase 3: Solidity Generation (Generator Agent)
             print("\n[Phase 3/7] Code Generation (Generator Agent)")
             task_desc = create_solidity_generator_task_description(schema)
-            task = Task(description=task_desc, expected_output="Solidity code", agent=self.generator_agent)
+            task = Task(
+                description=task_desc,
+                expected_output=(
+                    "Raw Solidity ^0.8.0 source code — NO markdown fences, NO explanation text. "
+                    "The contract MUST implement every obligation, function, state, and rule listed in the task description. "
+                    "Every MANDATORY section (TOKEN CONTRACT, GOVERNANCE, ESCROW, etc.) must be fully implemented if present. "
+                    "Target 150-400 lines. A correct 300-line contract is far better than a 60-line stub. "
+                    "Every function must contain complete logic: require() checks, state changes, value transfers, events."
+                ),
+                agent=self.generator_agent
+            )
             crew = Crew(agents=[self.generator_agent], tasks=[task], verbose=False)
             
             try:
@@ -679,7 +773,19 @@ class IBMAgenticContractTranslator:
             # Phase 4: Security Audit (Auditor Agent)
             print("\n[Phase 4/7] Security Analysis (Auditor Agent)")
             task_desc = create_audit_task_description(solidity_code)
-            task = Task(description=task_desc, expected_output="Security audit JSON", agent=self.auditor_agent)
+            task = Task(
+                description=task_desc,
+                expected_output=(
+                    "Valid JSON object with exactly these keys: "
+                    "severity_level (none/low/medium/high/critical), "
+                    "approved (boolean, true only if severity is none or low), "
+                    "issues (array — each item names a specific function and describes the exploit path), "
+                    "recommendations (array of specific line-level fixes), "
+                    "vulnerability_count (integer matching issues array length), "
+                    "security_score (A/B/C/D/F). Return ONLY the JSON — no markdown, no prose."
+                ),
+                agent=self.auditor_agent
+            )
             crew = Crew(agents=[self.auditor_agent], tasks=[task], verbose=False)
             
             try:
@@ -717,7 +823,17 @@ class IBMAgenticContractTranslator:
                 
                 # Create refinement task based on audit findings
                 task_refine_desc = create_refinement_task_description(solidity_code, audit_report)
-                task_refine = Task(description=task_refine_desc, expected_output="Fixed Solidity code", agent=self.refiner_agent)
+                task_refine = Task(
+                    description=task_refine_desc,
+                    expected_output=(
+                        "Raw Solidity ^0.8.0 source code — NO markdown fences, NO explanation text. "
+                        "Every vulnerability listed in the audit MUST be fixed. "
+                        "Apply Checks-Effects-Interactions: state changes BEFORE external calls. "
+                        "Add reentrancy guards on all functions making external calls. "
+                        "All inputs validated with require(). All original function names and business logic preserved."
+                    ),
+                    agent=self.refiner_agent
+                )
                 crew_refine = Crew(agents=[self.refiner_agent], tasks=[task_refine], verbose=False)
                 
                 try:
@@ -734,7 +850,19 @@ class IBMAgenticContractTranslator:
                 # Re-audit the refined code
                 print(f"\n[Phase 4.{refinement_count}b] Re-auditing refined contract")
                 task_re_audit_desc = create_audit_task_description(solidity_code)
-                task_re_audit = Task(description=task_re_audit_desc, expected_output="Security audit JSON", agent=self.auditor_agent)
+                task_re_audit = Task(
+                    description=task_re_audit_desc,
+                    expected_output=(
+                        "Valid JSON object with exactly these keys: "
+                        "severity_level (none/low/medium/high/critical), "
+                        "approved (boolean, true only if severity is none or low), "
+                        "issues (array — each item names a specific function and describes the exploit path), "
+                        "recommendations (array of specific line-level fixes), "
+                        "vulnerability_count (integer matching issues array length), "
+                        "security_score (A/B/C/D/F). Return ONLY the JSON — no markdown, no prose."
+                    ),
+                    agent=self.auditor_agent
+                )
                 crew_re_audit = Crew(agents=[self.auditor_agent], tasks=[task_re_audit], verbose=False)
                 
                 try:
@@ -773,7 +901,17 @@ class IBMAgenticContractTranslator:
             # Phase 5: ABI Generation (ABI Agent)
             print("\n[Phase 5/7] Interface Generation (ABI Agent)")
             task_desc = create_abi_generator_task_description(solidity_code)
-            task = Task(description=task_desc, expected_output="ABI JSON array", agent=self.abi_agent)
+            task = Task(
+                description=task_desc,
+                expected_output=(
+                    "Valid JSON array of ABI elements — NO markdown fences, NO explanation text. "
+                    "MUST include: constructor with correct input types and stateMutability, "
+                    "every public/external function with correct inputs, outputs, and stateMutability, "
+                    "every event with all parameters and indexed flags correct. "
+                    "Types must be exact Solidity types (uint256 not uint). Parameter names preserved exactly."
+                ),
+                agent=self.abi_agent
+            )
             crew = Crew(agents=[self.abi_agent], tasks=[task], verbose=False)
             
             try:
@@ -804,7 +942,17 @@ class IBMAgenticContractTranslator:
                 contract_name = contract_name[:40]
                 
                 task_desc = create_mcp_task_description(abi, schema, contract_name)
-                task = Task(description=task_desc, expected_output="Complete Python MCP server code", agent=self.mcp_agent)
+                task = Task(
+                    description=task_desc,
+                    expected_output=(
+                        "Complete, self-contained Python file — NO markdown fences, NO explanation text. "
+                        "MUST use FastMCP, load .env and ABI JSON from same directory as script, "
+                        "include @mcp.tool() decorated function for EVERY ABI function with correct "
+                        "payable/nonpayable/view handling, try/except on each tool returning {\"error\": str(e)}, "
+                        "and end with: if __name__ == '__main__': mcp.run()"
+                    ),
+                    agent=self.mcp_agent
+                )
                 crew = Crew(agents=[self.mcp_agent], tasks=[task], verbose=False)
                 
                 try:
@@ -837,7 +985,20 @@ class IBMAgenticContractTranslator:
             contract_name = contract_name[:40]
             
             task_desc = create_quality_evaluation_task_description(solidity_code, schema, contract_name)
-            task = Task(description=task_desc, expected_output="Quality evaluation JSON", agent=self.quality_evaluator_agent)
+            task = Task(
+                description=task_desc,
+                expected_output=(
+                    "Valid JSON object with exactly these top-level keys: "
+                    "metric_1_functional_completeness (object with score 0-100 and evidence), "
+                    "metric_2_variable_fidelity (object with score 0-100 and evidence), "
+                    "metric_3_state_machine (object with score 0-100 and evidence), "
+                    "metric_4_business_logic (object with score 0-100 and evidence), "
+                    "metric_5_code_quality (object with score 0-100 and evidence), "
+                    "composite_score (object with final_score and grade). "
+                    "Scores must be precise integers (e.g. 73 not 75). Return ONLY the JSON — no markdown."
+                ),
+                agent=self.quality_evaluator_agent
+            )
             crew = Crew(agents=[self.quality_evaluator_agent], tasks=[task], verbose=False)
             
             try:
@@ -934,7 +1095,8 @@ class IBMAgenticContractTranslator:
             print("\n[Phase 2/6] Contract Analysis (Parser Program)")
             schema = self.parser.forward(contract_text, self.llm)
             results['schema'] = schema
-            print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            _conds = schema.conditions if schema.conditions else {}
+            print(f"✓ Parsed: {len(_conds.get('state_names', []))} states, {len(_conds.get('events', []))} events, {len(_conds.get('function_names', []))} functions, {len(schema.obligations)} obligations")
             
             # Convert schema to dict for JSON serialization
             try:
@@ -952,7 +1114,7 @@ class IBMAgenticContractTranslator:
                 'status': 'complete',
                 'data': {
                     'title': 'Contract Analysis',
-                    'message': f'Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms',
+                    'message': f'Parsed: {len(_conds.get("state_names", []))} states, {len(_conds.get("events", []))} events, {len(_conds.get("function_names", []))} functions, {len(schema.obligations)} obligations',
                     'contract_type': schema.contract_type,
                     'parties': schema_dict.get('parties', []) if isinstance(schema_dict, dict) else [],
                     'financial_terms': schema_dict.get('financial_terms', []) if isinstance(schema_dict, dict) else [],
@@ -1042,7 +1204,20 @@ class IBMAgenticContractTranslator:
             contract_name = contract_name[:40]
             
             task_desc = create_quality_evaluation_task_description(solidity_code, schema, contract_name)
-            task = Task(description=task_desc, expected_output="Quality evaluation JSON", agent=self.quality_evaluator_agent)
+            task = Task(
+                description=task_desc,
+                expected_output=(
+                    "Valid JSON object with exactly these top-level keys: "
+                    "metric_1_functional_completeness (object with score 0-100 and evidence), "
+                    "metric_2_variable_fidelity (object with score 0-100 and evidence), "
+                    "metric_3_state_machine (object with score 0-100 and evidence), "
+                    "metric_4_business_logic (object with score 0-100 and evidence), "
+                    "metric_5_code_quality (object with score 0-100 and evidence), "
+                    "composite_score (object with final_score and grade). "
+                    "Scores must be precise integers (e.g. 73 not 75). Return ONLY the JSON — no markdown."
+                ),
+                agent=self.quality_evaluator_agent
+            )
             crew = Crew(agents=[self.quality_evaluator_agent], tasks=[task], verbose=False)
             
             try:
@@ -1117,7 +1292,7 @@ class IBMAgenticContractTranslator:
             }
         
         # Save all outputs (applies to both modes)
-        self._save_outputs(results, output_dir, schema)
+        self._save_outputs(results, output_dir, schema, contract_text)
         
         print("\n" + "="*70)
         print("✅ TRANSLATION COMPLETE")
@@ -1141,7 +1316,20 @@ class IBMAgenticContractTranslator:
         
         # Use the quality evaluator agent
         task_desc = create_quality_evaluation_task_description(ground_truth_code, schema, contract_name)
-        task = Task(description=task_desc, expected_output="Quality evaluation JSON", agent=self.quality_evaluator_agent)
+        task = Task(
+            description=task_desc,
+            expected_output=(
+                "Valid JSON object with exactly these top-level keys: "
+                "metric_1_functional_completeness (object with score 0-100 and evidence), "
+                "metric_2_variable_fidelity (object with score 0-100 and evidence), "
+                "metric_3_state_machine (object with score 0-100 and evidence), "
+                "metric_4_business_logic (object with score 0-100 and evidence), "
+                "metric_5_code_quality (object with score 0-100 and evidence), "
+                "composite_score (object with final_score and grade). "
+                "Scores must be precise integers (e.g. 73 not 75). Return ONLY the JSON — no markdown."
+            ),
+            agent=self.quality_evaluator_agent
+        )
         crew = Crew(agents=[self.quality_evaluator_agent], tasks=[task], verbose=False)
         
         try:
@@ -1290,7 +1478,8 @@ class IBMAgenticContractTranslator:
             print("\n[Phase 2/6] Contract Analysis (Parser Program)")
             schema = self.parser.forward(contract_text, self.llm)
             results['schema'] = schema
-            print(f"✓ Parsed: {len(schema.parties)} parties, {len(schema.financial_terms)} financial terms")
+            _conds = schema.conditions if schema.conditions else {}
+            print(f"✓ Parsed: {len(_conds.get('state_names', []))} states, {len(_conds.get('events', []))} events, {len(_conds.get('function_names', []))} functions, {len(schema.obligations)} obligations")
             
             # Phase 3: Solidity Generation
             print("\n[Phase 3/6] Code Generation (Generator Program)")
@@ -1337,7 +1526,7 @@ class IBMAgenticContractTranslator:
                 raise Exception("Halted due to security concerns")
         
         # Save all outputs
-        self._save_outputs(results, output_dir, schema)
+        self._save_outputs(results, output_dir, schema, contract_text)
         
         print("\n" + "="*70)
         print("✅ TRANSLATION COMPLETE")
@@ -1345,7 +1534,7 @@ class IBMAgenticContractTranslator:
         
         return results
     
-    def _save_outputs(self, results: Dict, output_dir: str, schema):
+    def _save_outputs(self, results: Dict, output_dir: str, schema, contract_text: str = ""):
         """Save all outputs including MCP server"""
         
         print("\n💾 Saving outputs...")
@@ -1369,6 +1558,12 @@ class IBMAgenticContractTranslator:
         contract_name = "_".join([p.name.replace(' ', '_')[:10] for p in schema.parties[:2]]) if schema.parties else "Contract"
         contract_name = contract_name[:40]
         
+        # Save original English contract input
+        if contract_text:
+            with open(subdir_path / "contract_input.txt", 'w', encoding='utf-8') as f:
+                f.write(contract_text)
+            print(f"   ✓ contract_input.txt")
+
         # Save Solidity
         with open(subdir_path / f"{contract_name}.sol", 'w', encoding='utf-8') as f:
             f.write(results['solidity'])

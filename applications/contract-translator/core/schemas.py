@@ -55,8 +55,8 @@ class ContractParty(BaseModel):
 
 class FinancialTerm(BaseModel):
     """Universal financial term"""
-    amount: float
-    currency: str = "ETH"
+    amount: Optional[float] = None
+    currency: Optional[str] = "ETH"
     purpose: str 
     frequency: Optional[str] = None 
     due_date: Optional[str] = None

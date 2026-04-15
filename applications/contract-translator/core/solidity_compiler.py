@@ -21,18 +21,27 @@ class SolidityCompilationChecker:
         self.compiler_cmd, self.solc_available = self._check_solc_available()
     
     def _strip_version_pragma(self, solidity_code: str) -> str:
-        """Remove version pragma to allow compilation with any compiler version"""
+        """Replace version pragma with a permissive one to allow compilation with any compiler version"""
         lines = solidity_code.split('\n')
-        filtered_lines = []
-        
+        replaced = False
+        result_lines = []
+
         for line in lines:
             stripped = line.strip()
-            # Skip pragma solidity lines
             if stripped.startswith('pragma solidity'):
-                continue
-            filtered_lines.append(line)
-        
-        return '\n'.join(filtered_lines)
+                if not replaced:
+                    # Replace with a wide-open pragma so solc never complains about missing/mismatched version
+                    result_lines.append('pragma solidity >=0.4.0;')
+                    replaced = True
+                # drop duplicate pragma lines
+            else:
+                result_lines.append(line)
+
+        if not replaced:
+            # No pragma was present at all — prepend one
+            result_lines.insert(0, 'pragma solidity >=0.4.0;')
+
+        return '\n'.join(result_lines)
     
     def _check_solc_available(self) -> tuple[Optional[list], bool]:
         """Check if solc or solcjs is available in the system"""
@@ -108,8 +117,8 @@ class SolidityCompilationChecker:
                 compile_cmd = self.compiler_cmd + ['--bin', '--abi', '--output-dir', str(output_dir), tmp_path]
                 version_cmd = self.compiler_cmd + ['--version']
             else:
-                # Native solc: solc --bin --abi -o <dir> file.sol
-                compile_cmd = self.compiler_cmd + ['--bin', '--abi', '-o', str(output_dir), tmp_path]
+                # Native solc: solc --bin --abi --overwrite -o <dir> file.sol
+                compile_cmd = self.compiler_cmd + ['--bin', '--abi', '--overwrite', '-o', str(output_dir), tmp_path]
                 version_cmd = self.compiler_cmd + ['--version']
             
             # Try to compile the contract

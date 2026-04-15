@@ -39,6 +39,7 @@ PAY CLOSE ATTENTION TO:
 4. **State Transitions**: Capture the EXACT transition logic (e.g., "Initializing → Active when lease starts")
 5. **Specific Conditions**: Extract the EXACT conditions mentioned (e.g., "rent must be paid by day 5 of each month")
 6. **Specific Events**: If events are mentioned like "LeaseInitialized", "RentPaid", extract those EXACT names
+7. **Obligations**: For smart contracts, EVERY described function or operation is an obligation. Map each to: party = who is authorized to call it (e.g. "token holder", "owner"), description = what it does on-chain. NEVER leave obligations empty when functions are described.
 
 Return ONLY valid JSON with this structure:
 {{
@@ -81,12 +82,22 @@ Return ONLY valid JSON with this structure:
     ],
     "obligations": [
         {{
-            "party": "EXACT party name",
-            "description": "EXACT obligation as written",
-            "deadline": "EXACT deadline if mentioned",
-            "penalty_for_breach": "EXACT penalty if mentioned"
+            "party": "WHO performs or is authorized to call this (e.g. 'token holder', 'contract owner', 'buyer', 'tenant')",
+            "description": "WHAT they must/can do - map EVERY described function or operation to an obligation here",
+            "deadline": "EXACT deadline if mentioned, else null",
+            "penalty_for_breach": "EXACT penalty if mentioned, else null"
         }}
     ],
+
+CRITICAL FOR OBLIGATIONS: For smart contracts, EVERY described function or operation IS an obligation.
+Do NOT leave this array empty if functions are described.
+For each function/operation mentioned, create one obligation entry:
+  - party = the role authorized to call it (e.g. 'token holder', 'owner', 'spender', 'buyer')
+  - description = what the operation does on-chain (e.g. 'transfer tokens to another address')
+Example: if contract mentions 'transferring tokens' and 'approving spenders', extract:
+  {{"party": "token holder", "description": "transfer tokens to any address", "deadline": null, "penalty_for_breach": null}}
+  {{"party": "token holder", "description": "approve a spender to transfer tokens on their behalf", "deadline": null, "penalty_for_breach": null}}
+
     "special_terms": ["EXACT special conditions word-for-word"],
     "conditions": {{
         "function_names": ["EXACT function names from contract: initializeLease, payRent, etc"],
@@ -99,13 +110,9 @@ Return ONLY valid JSON with this structure:
     "termination_conditions": ["EXACT termination conditions from contract"]
 }}
 
-EXTRACT EVERYTHING SPECIFIC - DO NOT USE GENERIC NAMES OR PLACEHOLDERS."""
+EXTRACT EVERYTHING SPECIFIC - DO NOT USE GENERIC NAMES OR PLACEHOLDERS.
+OBLIGATIONS MUST NOT BE EMPTY if any functions or operations are described."""
 
-
-"""
-Create task description for the Solidity Generator Agent.
-Final enhanced version with targeted improvements for common failure patterns.
-"""
 
 def create_solidity_generation_prompt(schema):
     conditions = schema.conditions if schema.conditions else {}
@@ -115,888 +122,245 @@ def create_solidity_generation_prompt(schema):
     state_transitions = conditions.get('state_transitions', [])
     events = conditions.get('events', [])
     logic_conditions = conditions.get('logic_conditions', [])
-    
-    return f"""Generate a COMPLETE, FUNCTIONAL Solidity ^0.8.0 smart contract that FULLY implements this specification.
+    # Detect contract type from type field and function names
+    ct = (schema.contract_type or "").lower()
+    fn_lower = [f.lower() for f in function_names]
 
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 1 - SEMANTIC ANALYSIS (COMPLETE THIS BEFORE WRITING ANY CODE)
-═══════════════════════════════════════════════════════════════════════════════
+    is_token = (
+        "token" in ct
+        or any(f in fn_lower for f in ["transfer", "approve", "transferfrom", "balanceof", "totalsupply", "mint", "burn"])
+    )
+    is_governance = (
+        "governance" in ct or "voting" in ct
+        or any(f in fn_lower for f in ["delegate", "vote", "propose", "execute", "getpriorvotes", "castballot"])
+    )
+    is_escrow = (
+        "escrow" in ct or "payment" in ct or "lending" in ct or "loan" in ct
+        or any(f in fn_lower for f in ["deposit", "release", "refund", "repay", "collateral"])
+    )
+    is_marketplace = (
+        "marketplace" in ct or "auction" in ct or "nft" in ct or "sale" in ct
+        or any(f in fn_lower for f in ["list", "bid", "buy", "purchase", "auction"])
+    )
+    is_staking = (
+        "staking" in ct or "reward" in ct or "yield" in ct
+        or any(f in fn_lower for f in ["stake", "unstake", "claim", "harvest"])
+    )
 
-Before generating any Solidity code, perform this analysis:
+    # Type-specific mandatory requirements
+    type_rules = ""
+    if is_token:
+        type_rules = """
+TOKEN CONTRACT — MANDATORY (every item below is required, omitting any = broken contract):
+- ERC20 interface: transfer(address,uint256), approve(address,uint256), transferFrom(address,address,uint256), balanceOf(address) view, allowance(address,address) view, totalSupply() view
+- State variables: string public name, string public symbol, uint8 public decimals, uint256 public totalSupply, mapping(address=>uint256) public balances, mapping(address=>mapping(address=>uint256)) public allowances
+- Events: Transfer(address indexed from, address indexed to, uint256 value), Approval(address indexed owner, address indexed spender, uint256 value)
+- transfer/approve/transferFrom MUST be callable by any user simultaneously — do NOT put them behind a state machine phase
+- Internal _transfer() helper that validates balances and updates both sender and recipient atomically
+- If minting exists: track totalSupply, emit Transfer(address(0), to, amount)
+- If burning exists: track totalSupply, emit Transfer(from, address(0), amount)
+"""
+    if is_governance:
+        type_rules += """
+GOVERNANCE/DELEGATION — MANDATORY:
+- mapping(address=>address) public delegates — who each account delegates voting power to
+- mapping(address=>uint256) public votingPower — actual current voting power (separate from balance)
+- delegate() must MOVE power: subtract from old delegate's votingPower, add to new delegate's votingPower
+- _afterTokenTransfer() internal: when tokens move, update votingPower for both sender's and receiver's current delegates
+- Checkpoints: store an array of (uint256 fromBlock, uint256 votes) per account — not a single value
+- getPriorVotes(address, uint256 blockNumber) must binary-search checkpoints for historical data
+- Invariant: sum of all votingPower == sum of all balances at all times
+"""
+    if is_escrow:
+        type_rules += """
+ESCROW/PAYMENT — MANDATORY:
+- Track deposits per depositor: mapping(address=>uint256) public deposits (or per-deal struct)
+- Funds enter via payable function; funds leave via (bool ok,) = recipient.call{value: amount}(""); require(ok)
+- Implement conditional release: require all conditions are met before releasing
+- Implement refund path: if conditions fail or deadline expires, depositors can reclaim
+- Enforce: contract.balance == sum of all unreleased deposits at all times
+"""
+    if is_marketplace:
+        type_rules += """
+MARKETPLACE/AUCTION — MANDATORY:
+- Each listing/auction stored in a struct with: seller, price/minBid, deadline, status
+- Bidding: track highestBid and highestBidder; refund previous highest bidder on outbid
+- Purchase/settlement: transfer ownership AND funds atomically
+- Fee calculation: if royalties/fees mentioned, compute as basis points (e.g. 250 = 2.5%) and distribute
+- Prevent sniping if mentioned: extend deadline on late bids
+"""
+    if is_staking:
+        type_rules += """
+STAKING/REWARDS — MANDATORY:
+- Track per-staker: mapping(address=>uint256) public staked, mapping(address=>uint256) public rewardDebt
+- Reward accrual: use a rewardPerShare accumulator updated on every stake/unstake/claim
+- At minimum: stake(uint256), unstake(uint256), claimRewards(), pendingRewards(address) view
+- Early withdrawal penalty: if mentioned, calculate and transfer penalty to treasury/burn
+- Correct accounting: rewards already paid to a staker must not be paid again (rewardDebt pattern)
+"""
 
-1. CORE PURPOSE IDENTIFICATION:
-   - What is the PRIMARY purpose of this contract in one sentence?
-   - Example: "Manage milestone-based grant payments to initiatives"
-   - Example: "Enable token swapping with automated market making"
-   - Example: "Facilitate NFT marketplace with royalty distribution"
+    # Temporal/business logic section
+    temporal_lines = []
+    if schema.dates:
+        for d in schema.dates:
+            temporal_lines.append(
+                f"- {d.date_type}: store as uint256, enforce with require(block.timestamp ...) — "
+                f"behavior MUST differ before vs after this date"
+            )
+    if logic_conditions:
+        for lc in logic_conditions:
+            temporal_lines.append(f"- Business rule: {lc} → implement as require() check or modifier using actual state/mappings")
+    if schema.financial_terms:
+        for t in schema.financial_terms:
+            freq = f", recurring {t.frequency}" if t.frequency else ", one-time"
+            temporal_lines.append(
+                f"- Financial: {t.purpose} {t.amount} {t.currency}{freq} → "
+                f"implement full on-chain transfer with balance tracking and emit event"
+            )
 
-2. COMPLETE WORKFLOW ANALYSIS:
-   - What happens FIRST? (initialization, creation, deposit)
-   - What happens NEXT? (assignment, approval, activation)
-   - What are the DECISION POINTS? (approval/rejection, success/failure)
-   - What triggers PAYMENTS or VALUE TRANSFERS?
-   - What is the TERMINAL STATE? (completion, cancellation, expiry)
-   - Map out the FULL USER JOURNEY from start to finish
-   - CRITICAL: Can multiple users perform different operations SIMULTANEOUSLY?
+    temporal_section = ""
+    if temporal_lines:
+        temporal_section = "\nTEMPORAL AND FINANCIAL LOGIC TO IMPLEMENT:\n" + "\n".join(temporal_lines) + "\n"
 
-3. IMPLIED STATE TRANSITIONS:
-   - If spec mentions "assigning X" → there must be a transition TO an ASSIGNED state
-   - If spec mentions "completing X" → there must be a transition TO a COMPLETED state
-   - If spec mentions "milestone payments" → need states for each milestone phase
-   - Every mentioned action implies a state change - identify them ALL
-   - CRITICAL: Are states PHASES of the workflow or TYPES of operations?
+    # Obligations
+    obligation_lines = ""
+    if schema.obligations:
+        obligation_lines = "\n".join(
+            f"- {o.party}: {o.description}"
+            + (f" [deadline: {o.deadline}]" if o.deadline else "")
+            + (f" [penalty: {o.penalty_for_breach}]" if o.penalty_for_breach else "")
+            for o in schema.obligations
+        )
+    else:
+        obligation_lines = "Derive obligations from function_names and contract purpose above."
 
-4. ECONOMIC FLOW ANALYSIS:
-   - Where do FUNDS ENTER the contract? (constructor, deposit function, payable calls)
-   - How are funds STORED? (contract balance, escrow mapping, locked amounts)
-   - What TRIGGERS RELEASE? (milestone completion, approval, time passing)
-   - Where do funds GO? (recipient address, multiple parties, refunds)
-   - Are there FEES or SPLITS? (percentages, fixed amounts, royalties)
+    # Party access control
+    party_lines = ""
+    if schema.parties:
+        party_lines = "\n".join(
+            f"- {p.name} ({p.role}): store as address state variable, write onlyX modifier, apply to appropriate functions"
+            for p in schema.parties
+        )
+    else:
+        party_lines = "At minimum: address public owner with onlyOwner modifier."
 
-5. CONTRACT TYPE DETECTION:
-   Identify the contract type to determine required standard behaviors:
-   
-   □ TOKEN CONTRACT (ERC20/ERC721)
-     → MANDATORY: transfer, approve, transferFrom, balanceOf, totalSupply
-     → MANDATORY: name, symbol, decimals (ERC20) or tokenURI (ERC721)
-     → MANDATORY: Transfer/Approval events
-     → MANDATORY: Allowances mapping (ERC20)
-     → STATE MACHINE RULE: Do NOT use states to control basic operations
-     → CONCURRENT ACCESS: All users must be able to transfer/approve simultaneously
-     → If missing ANY of these: YOU HAVE FAILED
-   
-   □ GOVERNANCE CONTRACT
-     → MANDATORY: Delegation must TRANSFER voting power, not just store relationships
-     → MANDATORY: Checkpoints must be HISTORICAL (block number + votes)
-     → MANDATORY: Votes must UPDATE when tokens transfer
-     → INVARIANT: sum(voting power) = sum(balances) at all times
-     → If delegation doesn't affect voting power: YOU HAVE FAILED
-   
-   □ PAYMENT/ESCROW CONTRACT
-     → Implement: deposit (payable), release, refund, balance tracking
-     → Implement: conditional release logic, dispute resolution if mentioned
-   
-   □ GRANTS/FUNDING CONTRACT
-     → Implement: application/proposal creation, milestone definitions
-     → Implement: milestone completion tracking, staged payment release
-     → Implement: grant assignment, progress tracking
-   
-   □ MARKETPLACE CONTRACT
-     → Implement: listing creation, purchase, transfer ownership
-     → Implement: pricing, fees, royalty distribution
-   
-   □ STAKING/REWARDS CONTRACT
-     → Implement: stake, unstake, reward calculation, claim
-     → Implement: time-based accrual, penalty for early withdrawal if mentioned
+    return f"""You are an expert Solidity engineer. Generate a COMPLETE, PRODUCTION-QUALITY Solidity ^0.8.0 smart contract that fully and correctly implements the specification below.
 
-6. INVARIANT IDENTIFICATION:
-   Before implementing, identify the key invariants that MUST hold:
-   
-   Examples:
-   - Token: sum(all balances) = totalSupply (always)
-   - Governance: sum(all voting power) = sum(all balances) (always)
-   - Escrow: sum(deposits) = sum(withdrawals) + balance (always)
-   - NFT: each tokenId has exactly one owner (always)
-   - Auction: highestBid >= previousBid (always)
-   
-   For EACH invariant:
-   - Write it down explicitly
-   - Identify which functions could violate it
-   - Add checks to prevent violation
-   
-   Test mental model: "If I call functions in ANY order, can I break this invariant?"
-
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 2 - CRITICAL GENERATION RULES (STRICT COMPLIANCE REQUIRED)
-═══════════════════════════════════════════════════════════════════════════════
-
-1. TRANSLATE EVERY GUARANTEE INTO ENFORCEABLE ON-CHAIN LOGIC
-   - For each promise, constraint, or outcome in the natural-language contract,
-     implement corresponding state changes, permission checks, and value transfers
-   - Violating the described behavior must be IMPOSSIBLE on-chain
-   - Never use placeholder functions, event-only logic, or implicit assumptions
-
-2. SYSTEM-WIDE INVARIANTS MUST HOLD ACROSS ALL FUNCTIONS
-   - Identify core invariants: conservation of funds, supply limits, state exclusivity,
-     delegation correctness, fairness between parties
-   - No invariant can be violated by calling functions in ANY order or combination
-   - Test mental model: "Can an attacker break this by calling functions in sequence?"
-
-3. DOMAIN TERMS IMPLY FULL DOMAIN SEMANTICS
-   - "Token" → Implement full ERC20/ERC721 with transfers, approvals, balances
-   - "NFT" → Implement unique ownership, metadata, transfers
-   - "Governance" → Implement proposals, voting, quorum, execution
-   - "Delegation" → Implement vote power transfer, revocation
-   - "Royalties" → Implement percentage calculation, automatic distribution
-   - "Milestone" → Implement completion tracking, staged payments
-   - DO NOT reduce domain concepts to symbolic or approximate behavior
-
-3.5 DELEGATION SEMANTICS (FOR GOVERNANCE TOKENS)
-    When implementing vote delegation:
-    
-    REQUIRED COMPONENTS:
-    1. Delegate mapping: tracks WHO each account delegates to
-    2. Voting power mapping: tracks CURRENT voting power of each account
-    3. Checkpoint system: tracks HISTORICAL voting power at block numbers
-    
-    REQUIRED BEHAVIORS:
-    a) Self-delegation: Users start with votes delegated to themselves OR must self-delegate
-    b) Vote transfer: When A delegates to B, A's voting power goes to B
-    c) Cascade on transfer: When tokens transfer, voting power updates accordingly
-    d) Historical tracking: Checkpoints record voting power at specific blocks
-    
-    CRITICAL INVARIANT: 
-    Sum of all voting power = Sum of all token balances (always)
-    
-    ✅ CORRECT delegation implementation:
-    ```solidity
-    mapping(address => address) public delegates;
-    mapping(address => uint256) public votingPower;
-    
-    function delegate(address delegatee) external {{
-        address currentDelegate = delegates[msg.sender];
-        uint256 delegatorBalance = balances[msg.sender];
-        
-        delegates[msg.sender] = delegatee;
-        
-        // Remove votes from old delegate
-        if (currentDelegate != address(0)) {{
-            votingPower[currentDelegate] -= delegatorBalance;
-        }}
-        
-        // Add votes to new delegate  
-        if (delegatee != address(0)) {{
-            votingPower[delegatee] += delegatorBalance;
-        }}
-        
-        emit DelegateChanged(msg.sender, currentDelegate, delegatee);
-    }}
-    
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal {{
-        // CRITICAL: Update voting power when tokens move
-        address fromDelegate = delegates[from];
-        address toDelegate = delegates[to];
-        
-        if (fromDelegate != address(0)) {{
-            votingPower[fromDelegate] -= amount;
-        }}
-        if (toDelegate != address(0)) {{
-            votingPower[toDelegate] += amount;
-        }}
-    }}
-    ```
-    
-    ❌ WRONG - Delegation that doesn't transfer voting power:
-    ```solidity
-    function delegate(address delegatee) external {{
-        delegates[msg.sender] = delegatee;  // Only stores, doesn't transfer votes!
-    }}
-    ```
-
-4. SEMANTIC FIDELITY OVER NAME MATCHING
-   - UNDERSTAND what the contract DOES before matching function names
-   - If spec says "releasing milestone payments", you MUST implement:
-     * Storage for milestone definitions (struct or mapping)
-     * Logic to track which milestones are completed
-     * Actual fund transfer mechanism (transfer, call, send)
-     * Access control for who can release payments
-   - If a listed function name doesn't fit the analyzed workflow, DON'T force it
-   - If the workflow requires unlisted functions, ADD them
-   - Names are GUIDANCE; correct behavior is MANDATORY
-
-5. EXPLICIT STATE MACHINE ENFORCEMENT
-   - All states must be REACHABLE through actual function calls
-   - States must be MUTUALLY EXCLUSIVE and MEANINGFUL
-   - Every state must have at least ONE function that transitions INTO it
-   - State transitions must reflect REAL operational phases, not artificial sequencing
-   - Every state-dependent function MUST use require(currentState == State.X)
-   - Never define states that are never set
-
-6. ACCESS CONTROL MUST BE JUSTIFIED AND ENFORCED
-   - Use modifiers for ALL access-controlled functions
-   - Common patterns:
-     * onlyOwner - for admin functions
-     * onlyCreator - for resource creator
-     * onlyRole - for role-based access
-   - Do NOT introduce privileged roles unless justified by specification
-   - Use least-privilege principles
-   - Every modifier must actually prevent unauthorized access with require()
-
-7. NO SILENT FAILURES OR SYMBOLIC LOGIC
-   - NEVER use: if (condition) return;
-   - ALWAYS use: require(condition, "Descriptive error message");
-   - Do NOT emit events without corresponding state or economic changes
-   - Do NOT substitute simplified logic for described behavior
-   - Every validation must revert on failure, never silently skip
-
-8. ECONOMIC LOGIC MUST BE COMPLETE AND CONSERVATIVE
-   - Implement ALL pricing, fees, transfers, and accounting FULLY
-   - Ensure conservation of value across all functions (input = output + fees)
-   - Every financial variable must affect LIVE execution paths
-   - If fundsAllocated is stored, it must be TRANSFERRED somewhere
-   - If price is stored, it must be CHECKED and CHARGED
-   - Never store economic values that are never used in transfers
-
-9. TIME-BASED CONDITIONS MUST AFFECT BEHAVIOR
-   - Store deadlines using uint256 timestamp variables
-   - ENFORCE deadlines using require(block.timestamp <= deadline)
-   - Time conditions must CHANGE state, permissions, or outcomes
-   - If deadline exists, implement what happens BEFORE and AFTER it
-   - Never store time variables that are never compared to block.timestamp
-
-10. EVENT SEMANTICS MUST MATCH COMPLETED ACTIONS
-    - Emit events ONLY AFTER successful state or value changes
-    - ONE event per distinct action type; no merged or decorative events
-    - Event parameters must include all relevant data about the action
-    - Never emit events in failed transactions (they will revert anyway)
-    - Event name should clearly indicate what happened (past tense)
-
-11. NO UNUSED OR DECORATIVE CODE
-    - Every variable must be WRITTEN in at least one function
-    - Every variable must be READ in at least one function (or returned by getter)
-    - Every function must modify state OR transfer value OR return useful data
-    - Every state must be SET in at least one function
-    - Every state must be CHECKED in at least one function guard
-    - If behavior cannot be implemented faithfully, OMIT it rather than fake it
-
-12. INTERNAL COHERENCE AND ADVERSARIAL SAFETY
-    - Contract must remain correct under ARBITRARY call order
-    - Functions must not contradict each other
-    - Variables must represent a SINGLE, clear concept
-    - Reentrancy protection where needed (external calls after state changes)
-    - Integer overflow protection (use SafeMath or Solidity ^0.8.0 built-in)
-    - Access control must not have bypasses
-
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 3 - FORBIDDEN PATTERNS (IMMEDIATE REJECTION IF PRESENT)
-═══════════════════════════════════════════════════════════════════════════════
-
-❌ FORBIDDEN - Empty or stub function bodies:
-```solidity
-function doSomething() external {{
-    // TODO: implement
-}}
-```
-
-❌ FORBIDDEN - Unused state variables:
-```solidity
-uint256 public deadline;  // Never checked against block.timestamp
-```
-
-❌ FORBIDDEN - Silent failures:
-```solidity
-function transfer(address to, uint256 amount) external {{
-    if (balances[msg.sender] < amount) return;  // Silent failure!
-    balances[to] += amount;
-}}
-```
-
-❌ FORBIDDEN - Decorative events without state changes:
-```solidity
-function doNothing() external {{
-    emit ActionPerformed(msg.sender);  // No actual action!
-}}
-```
-
-❌ FORBIDDEN - Unused states:
-```solidity
-enum State {{ ACTIVE, ASSIGNED, COMPLETED }}  // ASSIGNED never set in any function
-State public currentState;
-```
-
-❌ FORBIDDEN - Stored funds never transferred:
-```solidity
-uint256 public fundsAllocated;  // Stored but never used in transfer
-```
-
-❌ FORBIDDEN - Non-functional reentrancy guard:
-```solidity
-modifier nonReentrant() {{
-    require(msg.sender != address(0));  // Always true, useless!
-    _;
-}}
-
-// Also wrong:
-modifier nonReentrant() {{
-    require(msg.sender == tx.origin);  // Blocks all smart contracts!
-    _;
-}}
-```
-
-❌ FORBIDDEN - State jumps that skip intermediate states:
-```solidity
-// If states are ACTIVE → ASSIGNED → COMPLETED
-function complete() external {{
-    currentState = State.COMPLETED;  // Jumps from ACTIVE, skips ASSIGNED!
-}}
-```
-
-═══════════════════════════════════════════════════════════════════════════════
-CRITICAL: STATE MACHINE ANTI-PATTERNS
-═══════════════════════════════════════════════════════════════════════════════
-
-⚠️ WARNING: State machines are for WORKFLOW PHASES, not OPERATION TYPES
-
-❌ WRONG - States that represent operation types:
-```solidity
-enum State {{ TokenCreation, Transfer, Approval, Delegation }}
-// This makes ONLY ONE operation possible at a time for ALL users!
-
-function transfer(address to, uint256 amount) external inState(State.Transfer) {{
-    // Can only transfer when owner sets state to Transfer
-    // Breaks ALL concurrent operations!
-}}
-```
-
-✅ CORRECT - States that represent workflow phases:
-```solidity
-enum State {{ Fundraising, Active, Closed }}
-// Multiple operation types are possible within each phase
-
-function transfer(address to, uint256 amount) external {{
-    require(currentState == State.Active, "Transfers only in Active phase");
-    // All users can transfer simultaneously during Active phase
-}}
-```
-
-RULE: If your states are named after FUNCTIONS (Transfer, Approval, Mint),
-you are doing it WRONG. States should represent PHASES of the contract lifecycle.
-
-EXAMPLES OF CORRECT STATE USAGE:
-- Crowdfunding: Fundraising → Active → Refunding/Success
-- Auction: Open → Ended → Claimed
-- Vesting: Locked → Vesting → FullyVested
-- Grant: Proposed → Approved → InProgress → Completed
-- Sale: PreSale → PublicSale → Ended
-
-EXAMPLES OF INCORRECT STATE USAGE (DO NOT DO THIS):
-- Token: Minting, Transfer, Approval ❌ (operations, not phases)
-- Payment: Deposit, Withdraw, Refund ❌ (operations, not phases)
-- Governance: Propose, Vote, Execute ❌ (operations, not phases)
-
-FOR TOKEN CONTRACTS:
-- DO NOT use states to control transfer/approve/delegate
-- These operations should be available SIMULTANEOUSLY to all users
-- Only use states for phases like: Paused/Active, or PreSale/PublicSale/Ended
-
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 4 - CORRECT IMPLEMENTATION PATTERNS (FOLLOW THESE EXAMPLES)
-═══════════════════════════════════════════════════════════════════════════════
-
-✅ CORRECT - Complete function with full logic:
-```solidity
-function releaseMilestonePayment(uint256 grantId, uint256 milestoneId) 
-    external 
-    validGrant(grantId)
-    onlyGrantCreator(grantId)
-    inState(grantId, State.ASSIGNED)
-{{
-    require(!milestones[grantId][milestoneId].paid, "Already paid");
-    require(milestones[grantId][milestoneId].completed, "Milestone not completed");
-    require(address(this).balance >= milestones[grantId][milestoneId].amount, "Insufficient funds");
-    
-    milestones[grantId][milestoneId].paid = true;
-    grants[grantId].totalPaid += milestones[grantId][milestoneId].amount;
-    
-    (bool success, ) = grants[grantId].recipient.call{{value: milestones[grantId][milestoneId].amount}}("");
-    require(success, "Transfer failed");
-    
-    emit MilestonePaymentReleased(grantId, milestoneId, milestones[grantId][milestoneId].amount);
-    
-    // Check if all milestones paid, transition to COMPLETED
-    if (grants[grantId].totalPaid == grants[grantId].fundsAllocated) {{
-        grants[grantId].state = State.COMPLETED;
-        emit GrantCompleted(grantId);
-    }}
-}}
-```
-
-✅ CORRECT - All states are reachable:
-```solidity
-enum State {{ ACTIVE, ASSIGNED, COMPLETED, CANCELLED }}
-
-function createGrant(...) external {{
-    grants[id].state = State.ACTIVE;  // Entry point to ACTIVE
-}}
-
-function assignInitiative(uint256 grantId, ...) external inState(grantId, State.ACTIVE) {{
-    // ... assignment logic ...
-    grants[grantId].state = State.ASSIGNED;  // Transition to ASSIGNED
-}}
-
-function completeGrant(uint256 grantId) external inState(grantId, State.ASSIGNED) {{
-    // ... completion logic ...
-    grants[grantId].state = State.COMPLETED;  // Transition to COMPLETED
-}}
-
-function cancelGrant(uint256 grantId) external {{
-    require(grants[grantId].state == State.ACTIVE || grants[grantId].state == State.ASSIGNED);
-    grants[grantId].state = State.CANCELLED;  // Transition to CANCELLED
-}}
-```
-
-✅ CORRECT - Economic variables are actually used:
-```solidity
-uint256 public pricePerToken;
-
-function buyTokens(uint256 amount) external payable {{
-    uint256 cost = amount * pricePerToken;  // Price is USED
-    require(msg.value >= cost, "Insufficient payment");
-    
-    balances[msg.sender] += amount;
-    
-    if (msg.value > cost) {{
-        (bool success, ) = msg.sender.call{{value: msg.value - cost}}("");
-        require(success, "Refund failed");
-    }}
-}}
-```
-
-✅ CORRECT - Time variables are checked:
-```solidity
-uint256 public deadline;
-
-function submitProposal(...) external {{
-    require(block.timestamp <= deadline, "Deadline passed");  // Time CHECKED
-    // ... proposal logic ...
-}}
-
-function finalizeAfterDeadline() external {{
-    require(block.timestamp > deadline, "Deadline not reached");  // Time CHECKED
-    // ... finalization logic ...
-}}
-```
-
-✅ CORRECT - Historical checkpoint system:
-```solidity
-struct Checkpoint {{
-    uint256 fromBlock;
-    uint256 votes;
-}}
-
-mapping(address => Checkpoint[]) private checkpoints;
-
-// Write checkpoint when votes change
-function _writeCheckpoint(address account, uint256 newVotes) internal {{
-    uint256 blockNumber = block.number;
-    uint256 length = checkpoints[account].length;
-    
-    // Update current block checkpoint or create new one
-    if (length > 0 && checkpoints[account][length - 1].fromBlock == blockNumber) {{
-        checkpoints[account][length - 1].votes = newVotes;
-    }} else {{
-        checkpoints[account].push(Checkpoint(blockNumber, newVotes));
-    }}
-}}
-
-// Read historical votes
-function getPriorVotes(address account, uint256 blockNumber) external view returns (uint256) {{
-    require(blockNumber < block.number, "Not yet determined");
-    
-    uint256 length = checkpoints[account].length;
-    if (length == 0) return 0;
-    
-    // Binary search for the checkpoint at or before blockNumber
-    // ... binary search implementation ...
-}}
-```
-
-❌ WRONG - Checkpoint mapping never written to:
-```solidity
-mapping(address => uint256) public checkpoints;  // Not historical!
-
-function getPriorVotes(address account, uint256 checkpointId) external view returns (uint256) {{
-    return checkpoints[account];  // Always returns same value, not historical!
-}}
-```
-
-CHECKPOINT REQUIREMENTS:
-- Must store BLOCK NUMBER with each checkpoint
-- Must be an ARRAY or linked list, not a single value
-- Must be WRITTEN TO when voting power changes
-- Must support HISTORICAL QUERIES (past block numbers)
-
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 5 - SPECIFICATION ANALYSIS
-═══════════════════════════════════════════════════════════════════════════════
-
-CONTRACT SPECIFICATION:
+═══════════════════════════════════════
+CONTRACT SPECIFICATION
+═══════════════════════════════════════
 {schema.model_dump_json(indent=2)}
 
-PARTIES TO IMPLEMENT:
-{chr(10).join(f"- {p.name} ({p.role}) - store as address state variable, implement role-based access control" for p in schema.parties) if schema.parties else "- No parties specified"}
+EXTRACTED SCHEMA FIELDS:
+- Functions:    {', '.join(function_names) if function_names else 'derive from obligations and contract type'}
+- Variables:    {', '.join(variable_names) if variable_names else 'derive from financial terms and parties'}
+- States:       {', '.join(state_names) if state_names else 'derive from workflow lifecycle'}
+- Transitions:  {', '.join(state_transitions) if state_transitions else 'derive from obligations sequence'}
+- Events:       {', '.join(events) if events else 'one per function action'}
+- Rules:        {'; '.join(logic_conditions) if logic_conditions else 'derive from special_terms and obligations'}
 
-FINANCIAL TERMS TO IMPLEMENT COMPLETELY:
-{chr(10).join(f"- {t.purpose}: {t.amount} {t.currency} ({t.frequency if t.frequency else 'one-time'})" for t in schema.financial_terms) if schema.financial_terms else "- No financial terms specified"}
+OBLIGATIONS (implement each as a complete function):
+{obligation_lines}
 
-Analysis required:
-- How do funds enter? (constructor deposit, payable function, multiple deposits?)
-- How are funds released? (automatic, manual approval, milestone-based?)
-- Who receives funds? (single party, multiple parties, split percentages?)
-- Implement COMPLETE transfer logic with require() checks and actual value movement
+PARTIES AND ACCESS CONTROL:
+{party_lines}
+{type_rules}{temporal_section}
+═══════════════════════════════════════
+GENERATION PRINCIPLES
+═══════════════════════════════════════
 
-OBLIGATIONS TO IMPLEMENT AS COMPLETE FUNCTIONS:
-{chr(10).join(f"- {o.party} must: {o.description} (deadline: {o.deadline if o.deadline else 'none'})" for o in schema.obligations) if schema.obligations else "- No obligations specified"}
+1. UNDERSTAND THE BUSINESS LOGIC, DO NOT JUST MATCH NAMES
+   The biggest failure mode is implementing function signatures with hollow bodies.
+   Before writing each function, determine:
+   - What real-world operation does this represent?
+   - What invariant must hold before AND after this call?
+   - What state changes, who gains/loses what, and what can go wrong?
+   Examples of correct reasoning:
+   - "transfer" → sender balance decreases by X, recipient increases by X, X never appears twice (atomic)
+   - "release escrow" → verify release conditions, mark released, send exact escrowed amount to beneficiary, cannot release twice
+   - "complete milestone" → mark milestone struct as complete, check if all milestones done, if so auto-release remaining funds
+   - "bid in auction" → new bid > current highest, lock new bidder's ETH, refund previous highest bidder, update state
+   If you are assigning a spec field to a variable without using it in any transfer or decision, you are doing it wrong.
 
-Analysis required for each obligation:
-- What function implements this obligation?
-- What state changes when this is fulfilled?
-- Who can call this function? (implement access control)
-- What happens if deadline is missed? (implement time checks)
+2. WRITE LONG, COMPLETE CONTRACTS
+   Length is a virtue here. Include every helper that makes correctness provable:
+   - Internal _transfer(), _approve(), _mint(), _burn() helpers
+   - Private calculation functions (_calculateFee, _computeReward, _checkVested)
+   - Explicit getter functions for every important mapping or struct field
+   - Full input validation on every external function (zero-address, range, balance, state checks)
+   - Descriptive revert messages on every require()
+   - NatSpec comments (@notice, @param, @return) on all external/public functions
+   A 300-line contract with correct business logic is far better than a 60-line stub.
 
-REQUIRED CAPABILITIES (implement with appropriate functions):
+3. SEMANTIC DOMAIN FIDELITY
+   Domain terms carry full semantic weight:
+   - "Token" → complete ERC20 with transfer hooks, allowance flow, supply tracking
+   - "Vesting" → cliff timestamp, linear release calculation, released-amount tracking, clawback if mentioned
+   - "Milestone" → struct per milestone with (amount, completed, paid) fields, sequential or parallel completion logic
+   - "Royalty" → basis-point percentage applied to every qualifying transfer, distributed to rights holder automatically
+   - "Delegation" → voting power physically moves between accounts, cascades when tokens transfer
+   - "Auction" → time-bounded, refunds outbid participants, handles ties per spec, settles atomically
+   Do not reduce these to a counter or a flag — implement the full domain semantics.
 
-**Function Capabilities to Implement:**
-{chr(10).join(f"- {fn} - analyze what this capability MEANS and implement the FULL behavior" for fn in function_names) if function_names else "- Extract required capabilities from obligations and financial terms"}
+4. TEMPORAL LOGIC MUST CHANGE BEHAVIOR
+   Every time-related variable must:
+   - Be stored as uint256 (Unix timestamp or block number)
+   - Be compared to block.timestamp or block.number in a require() or modifier
+   - Produce genuinely different outcomes before vs after the boundary
+   If a deadline is stored but never compared, or compared but behavior is identical either side, it is a bug.
+   Implement both the "before deadline" path AND the "after deadline" path explicitly.
 
-GUIDANCE: These names indicate WHAT should be possible. Implement the BEHAVIOR, not just the name.
-- Add helper functions if needed for the workflow
-- Combine functions if they represent a single atomic operation
-- Split functions if one name implies multiple distinct actions
+5. ECONOMIC INVARIANTS MUST HOLD UNDER ANY CALL SEQUENCE
+   Identify the core balance invariant for this contract and enforce it:
+   - Tokens: sum(all balances) == totalSupply after every function
+   - Escrow: contract.balance == sum(unreleased deposits) after every function
+   - Auction: contract.balance >= highestBid after every function
+   Write the invariant as a comment above the contract and design all functions to preserve it.
+   Test mentally: "If I call these functions in a hostile order, can I steal funds or mint tokens for free?"
 
-**State Variables to Use Meaningfully:**
-{chr(10).join(f"- {vn} - must be both WRITTEN and READ in function logic" for vn in variable_names) if variable_names else "- Extract variable names from financial terms, parties, and dates"}
+6. STATES = LIFECYCLE PHASES ONLY
+   States must represent the contract's lifecycle stages (Pending → Active → Completed → Cancelled).
+   Never name a state after an operation (Transfer, Approve, Deposit).
+   Every state must be SET in at least one function and CHECKED in at least one modifier or require().
+   Terminal states (Completed, Cancelled, Expired) must be reachable.
+   For tokens: do NOT block transfer/approve behind a state — users must be able to call them simultaneously.
 
-CRITICAL: Every listed variable must appear in:
-1. At least one function that WRITES to it
-2. At least one function that READS from it (or a getter function)
+7. ACCESS CONTROL IS NON-NEGOTIABLE
+   Every function that changes critical parameters, transfers funds, or mints/burns tokens must have a modifier.
+   Derive roles from the parties in the spec. Use least-privilege.
+   Every modifier must contain a real require() that reverts on failure.
 
-**States to Implement with Transitions:**
-{chr(10).join(f"- {sn} - implement transition logic TO and FROM this state" for sn in state_names) if state_names else "- Determine if contract needs states based on workflow analysis"}
+8. NO DECORATIVE CODE
+   Every state variable must be written by ≥1 function and read by ≥1 function.
+   Every function must either change state or transfer value or return computed data.
+   Use require(condition, "message") — never if(condition) return.
+   Emit events only after successful state/value changes; include all relevant parameters.
 
-CRITICAL: For each state listed:
-1. At least one function must SET the contract to this state
-2. At least one function must CHECK for this state (in modifier or require)
-3. States must form a coherent workflow (no orphaned states)
-4. States must represent PHASES, not OPERATION TYPES
+═══════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════
 
-**State Transitions to Enforce:**
-{chr(10).join(f"- {st} - use require(currentState == ...) to enforce this transition" for st in state_transitions) if state_transitions else "- Implement transitions implied by obligations (e.g., create → assign → complete)"}
+Return ONLY Solidity code. No explanations, no markdown fences.
 
-**Events to Emit on Real Actions:**
-{chr(10).join(f"- {ev} - emit when the corresponding action COMPLETES successfully" for ev in events) if events else "- Create events based on function names (e.g., FunctionNameExecuted)"}
-
-CRITICAL: Events must be emitted AFTER state/value changes, never before or without changes.
-
-**Logic Conditions to Enforce:**
-{chr(10).join(f"- {lc} - implement with require() checks and calculations" for lc in logic_conditions) if logic_conditions else "- Extract conditions from obligations, special terms, and domain logic"}
-
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 6 - MANDATORY IMPLEMENTATION CHECKLIST
-═══════════════════════════════════════════════════════════════════════════════
-
-Before finalizing your contract, verify ALL of these:
-
-WORKFLOW COHERENCE:
-□ I can explain the complete user journey from start to finish
-□ Every state serves a purpose in the workflow  
-□ All state transitions are reachable through actual function calls
-□ Functions form a logical sequence of operations
-□ Users would understand what to call and when
-□ Multiple users can perform different operations simultaneously (unless intentionally prevented)
-
-STATE MACHINE:
-□ Every defined state is SET in at least one function
-□ Every defined state is CHECKED in at least one require() or modifier
-□ State transitions follow a logical progression (no impossible jumps)
-□ Terminal states (COMPLETED, CANCELLED) are reachable
-□ States represent WORKFLOW PHASES, not operation types
-□ If states are named after functions (Transfer, Approve), REDESIGN
-
-ECONOMIC LOGIC:
-□ If ANY payment/fund term exists, there is payable/transfer logic
-□ All stored fund amounts are actually transferred somewhere
-□ Conservation of value: deposits = withdrawals + remaining balance
-□ All price/fee variables are used in calculations
-□ Sufficient balance checks before all transfers
-
-TIME LOGIC:
-□ All deadline variables are compared to block.timestamp
-□ Functions behave differently before vs after deadlines
-□ Time-based state transitions are implemented if mentioned
-
-ACCESS CONTROL:
-□ All administrative functions have modifiers
-□ All modifiers contain actual require() checks
-□ Role-based access matches specification parties
-□ No unauthorized access bypasses exist
-
-ACCESS CONTROL VALIDATION:
-□ Identified which functions should be restricted (admin, owner, creator)
-□ Created appropriate modifiers (onlyOwner, onlyRole, etc.)
-□ Applied modifiers to ALL restricted functions
-□ Modifiers contain actual require() checks that revert
-□ CRITICAL: Functions that mint, burn, pause, or change critical parameters MUST have access control
-□ Test: "Can any random address call this function and break the contract?"
-
-FUNCTIONS THAT ALMOST ALWAYS NEED ACCESS CONTROL:
-- mint() / burn() - unless public minting is explicitly intended
-- pause() / unpause() - only admin
-- setPrice() / setFee() - only admin or governance
-- transferOwnership() - only current owner
-- withdraw() - only owner or authorized party
-- deprecate() / upgrade() - only owner
-- addToBlacklist() / removeFromBlacklist() - only admin
-
-FUNCTION IMPLEMENTATION:
-□ Zero functions with empty bodies or TODOs
-□ All functions have: validation + logic + state change + event
-□ No silent failures (no if/return pattern)
-□ All require() statements have descriptive error messages
-
-VARIABLE USAGE:
-□ All declared variables are written by at least one function
-□ All declared variables are read by at least one function
-□ No decorative variables that don't affect behavior
-
-EVENT EMISSIONS:
-□ Events are emitted only after successful operations
-□ One event type per action type (no merged events)
-□ Events include all relevant parameters
-□ Event names clearly indicate what happened
-
-ERC20 TOKEN COMPLETENESS (if contract type is TOKEN):
-□ name, symbol, decimals variables declared
-□ totalSupply tracked and accurate
-□ balances mapping for all accounts
-□ allowances mapping for approvals
-□ transfer(address to, uint256 amount) implemented
-□ approve(address spender, uint256 amount) implemented
-□ transferFrom(address from, address to, uint256 amount) implemented
-□ balanceOf(address account) view function implemented
-□ allowance(address owner, address spender) view function implemented
-□ Transfer(address from, address to, uint256 value) event emitted
-□ Approval(address owner, address spender, uint256 value) event emitted
-□ All token operations work CONCURRENTLY (no state machine blocking them)
-
-If ANY of these are missing, the contract is NOT ERC20 compliant.
-
-GOVERNANCE/DELEGATION COMPLETENESS (if contract has delegation):
-□ Delegate mapping exists (who delegates to whom)
-□ Voting power mapping exists (current vote power)
-□ Delegation TRANSFERS voting power, not just stores relationship
-□ Votes UPDATE when tokens transfer
-□ Checkpoints are HISTORICAL (block number + votes)
-□ Checkpoints are WRITTEN when voting power changes
-□ getPriorVotes() can query historical voting power
-□ Invariant holds: sum(voting power) = sum(balances)
-
-COMMON FAILURE CHECKS:
-□ If contract has "Token" in name: verified full ERC20 implementation
-□ If contract has "Governance" or "Delegation": votes update on transfer
-□ If contract has "Checkpoint": they are written to AND historical
-□ If contract has states: verified they represent PHASES not OPERATIONS
-□ If contract has mint(): verified it has access control
-□ If contract stores funds: verified they are actually transferred out
-□ If contract has deadline: verified it's compared to block.timestamp
-
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 7 - CONTRACT STRUCTURE TEMPLATE
-═══════════════════════════════════════════════════════════════════════════════
-
-Use this structure for your implementation:
-
-```solidity
+Structure your contract in this order:
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract [ContractName] {{
-    // ═══════════════════════════════════════════════════════════════
-    // STATE ENUMS (if states are needed based on workflow)
-    // ═══════════════════════════════════════════════════════════════
-    enum State {{ {', '.join(state_names) if state_names else 'Active, Completed, Terminated'} }}
-    
-    // ═══════════════════════════════════════════════════════════════
-    // STATE VARIABLES (using EXACT names, all must be used)
-    // ═══════════════════════════════════════════════════════════════
-    
-    // Access control
-    address public owner;
-    // Add role-based addresses for each party from specification
-    
-    // State tracking (if needed)
-    // State public currentState;  // Or mapping(uint256 => State) if per-resource
-    
-    // Economic variables (all must be used in transfers)
-    // uint256 public price;
-    // uint256 public totalFunds;
-    // mapping(address => uint256) public balances;
-    
-    // Time variables (all must be checked against block.timestamp)
-    // uint256 public deadline;
-    // uint256 public startTime;
-    
-    // Domain-specific variables
-    // Declare based on contract type and obligations
-    
-    // Counters for resource IDs
-    // uint256 public resourceCount;
-    
-    // ═══════════════════════════════════════════════════════════════
-    // STRUCTS (for complex resources)
-    // ═══════════════════════════════════════════════════════════════
-    // struct Resource {{
-    //     uint256 id;
-    //     State state;
-    //     address owner;
-    //     uint256 amount;
-    //     // ... other fields
-    // }}
-    
-    // ═══════════════════════════════════════════════════════════════
-    // MAPPINGS (for resource storage)
-    // ═══════════════════════════════════════════════════════════════
-    // mapping(uint256 => Resource) public resources;
-    
-    // ═══════════════════════════════════════════════════════════════
-    // EVENTS (one per action type, separate distinct actions)
-    // ═══════════════════════════════════════════════════════════════
-    // event ResourceCreated(uint256 indexed id, address indexed creator);
-    // event StateChanged(uint256 indexed id, State newState);
-    // event PaymentReleased(uint256 indexed id, address indexed recipient, uint256 amount);
-    
-    // ═══════════════════════════════════════════════════════════════
-    // MODIFIERS (access control and state validation)
-    // ═══════════════════════════════════════════════════════════════
-    modifier onlyOwner() {{
-        require(msg.sender == owner, "Not authorized");
-        _;
-    }}
-    
-    modifier onlyResourceOwner(uint256 resourceId) {{
-        require(resources[resourceId].owner == msg.sender, "Not resource owner");
-        _;
-    }}
-    
-    modifier inState(uint256 resourceId, State _state) {{
-        require(resources[resourceId].state == _state, "Invalid state for this action");
-        _;
-    }}
-    
-    modifier validResourceId(uint256 resourceId) {{
-        require(resourceId < resourceCount, "Invalid resource ID");
-        _;
-    }}
-    
-    modifier beforeDeadline() {{
-        require(block.timestamp <= deadline, "Deadline passed");
-        _;
-    }}
-    
-    modifier afterDeadline() {{
-        require(block.timestamp > deadline, "Deadline not reached");
-        _;
-    }}
-    
-    // ═══════════════════════════════════════════════════════════════
-    // CONSTRUCTOR
-    // ═══════════════════════════════════════════════════════════════
-    constructor(...) {{
-        owner = msg.sender;
-        // Initialize all state variables
-        // Set initial state if using state machine
-        // currentState = State.Active;
-    }}
-    
-    // ═══════════════════════════════════════════════════════════════
-    // MAIN FUNCTIONS (implement complete logic)
-    // ═══════════════════════════════════════════════════════════════
-    
-    // Each function must include:
-    // 1. Access control (modifiers)
-    // 2. State validation (require currentState or inState modifier)
-    // 3. Input validation (require checks on parameters)
-    // 4. State updates (modify storage variables)
-    // 5. Fund transfers (if applicable, with success checks)
-    // 6. Event emissions (after all changes succeed)
-    // 7. State transitions (if applicable)
-    
-    // function createResource(...) external payable {{
-    //     // 1. Access control: only authorized parties
-    //     // 2. State validation: check contract or resource state
-    //     // 3. Input validation: require(amount > 0, ...)
-    //     // 4. State updates: resources[id] = Resource(...)
-    //     // 5. Fund handling: if payable, store or transfer
-    //     // 6. Event emission: emit ResourceCreated(id, msg.sender)
-    //     // 7. State transition: currentState = State.NextState
-    // }}
-    
-    // ═══════════════════════════════════════════════════════════════
-    // VIEW FUNCTIONS (getters for all important state)
-    // ═══════════════════════════════════════════════════════════════
-    
-    // function getResource(uint256 resourceId) external view validResourceId(resourceId) returns (Resource memory) {{
-    //     return resources[resourceId];
-    // }}
-    
-    // ═══════════════════════════════════════════════════════════════
-    // INTERNAL HELPER FUNCTIONS (if needed for complex logic)
-    // ═══════════════════════════════════════════════════════════════
-    
-    // function _calculateAmount(...) internal pure returns (uint256) {{
-    //     // Complex calculations
-    // }}
-    
-    // function _transferFunds(address recipient, uint256 amount) internal {{
-    //     require(address(this).balance >= amount, "Insufficient balance");
-    //     (bool success, ) = recipient.call{{value: amount}}("");
-    //     require(success, "Transfer failed");
-    // }}
-}}
-```
+1. Interfaces (if implementing a standard like ERC20)
+2. Contract declaration with NatSpec @title/@notice
+3. Enums (lifecycle states, if needed)
+4. Structs (for complex resources)
+5. State variables (all used, grouped: access control, state, economics, time, domain-specific)
+6. Events (one per distinct action, indexed params)
+7. Modifiers
+8. Constructor (initialize all state, assign roles, set initial phase)
+9. External/public functions (complete logic — validation → state update → transfer → event)
+10. Internal helper functions
+11. View/pure getter functions
 
-═══════════════════════════════════════════════════════════════════════════════
-PHASE 8 - FINAL VALIDATION QUESTIONS
-═══════════════════════════════════════════════════════════════════════════════
-
-Before submitting your contract, answer these questions:
-
-1. Can multiple users perform different operations simultaneously?
-   (If no, your state machine is probably wrong)
-
-2. If this is a token, can I use it in Uniswap/DEX?
-   (If no, you're missing ERC20 functions or blocking them with states)
-
-3. If delegation exists, does voting power actually move between accounts?
-   (If no, your delegation is decorative)
-
-4. If checkpoints exist, can I query voting power at block N?
-   (If no, your checkpoints aren't historical)
-
-5. Can a random attacker mint unlimited tokens?
-   (If yes, you forgot access control)
-
-6. Do all stored fund amounts eventually get transferred?
-   (If no, you have unused economic variables)
-
-7. Can I break any invariant by calling functions in creative orders?
-   (If yes, your contract has a critical bug)
-
-8. If there are states, do they represent phases or operation types?
-   (If operation types, REDESIGN - states should be phases)
-
-If you answered wrong to ANY of these, GO BACK and fix it.
-
-═══════════════════════════════════════════════════════════════════════════════
-FINAL INSTRUCTIONS
-═══════════════════════════════════════════════════════════════════════════════
-
-1. Complete PHASE 1 analysis before writing any code
-2. Identify contract type and required standard behaviors
-3. Map out complete workflow and state transitions
-4. Implement ALL economic logic with actual fund transfers
-5. Ensure ALL states are reachable and checked
-6. Use ALL listed variables in meaningful ways
-7. Verify ALL checklist items before finalizing
-8. Return ONLY complete, production-ready Solidity code
-9. NO placeholders, NO TODOs, NO stub functions
-10. Every line of code must serve the specification's intent
-
-Your goal: Generate a contract that FULLY implements the specification such that
-violating any stated guarantee or workflow is IMPOSSIBLE on-chain.
-
-BEGIN GENERATION:
+Aim for 150–400 lines. Completeness and correctness over brevity.
 """
+
 
 
 def create_mcp_task_description(abi, schema, contract_name: str) -> str:

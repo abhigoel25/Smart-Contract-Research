@@ -26,7 +26,13 @@ import time
 contract_translator_path = Path(__file__).parent.parent / "contract-translator"
 sys.path.insert(0, str(contract_translator_path))
 
-from agentics import LLM, user_message, system_message
+from crewai import LLM
+
+def system_message(content: str) -> dict:
+    return {"role": "system", "content": content}
+
+def user_message(content: str) -> dict:
+    return {"role": "user", "content": content}
 
 # Check which implementation to use via environment variable
 # USE_MODULAR_CORE: 'true' (default) = use modular core/, 'false' = use legacy agentic_implementation.py
@@ -286,7 +292,7 @@ Respond with ONLY the JSON, no extra text or markdown."""
     try:
         # Wrap LLM call with timeout to prevent hanging
         def call_llm():
-            return llm.chat(messages=messages)
+            return llm.call(messages)
         
         loop = asyncio.get_event_loop()
         response = await asyncio.wait_for(
@@ -1170,7 +1176,7 @@ def batch_translate():
                         'contract_id': contract_num,
                         'batch_id': batch_id,
                         'timestamp': datetime.now().isoformat(),
-                        'contract_text': contract_text[:500],  # Truncated for storage
+                        'contract_text': contract_text,  # Full English contract used as input
                         'latency_seconds': latency,
                         'phase_times': phase_times,
                         'generated_evaluation': quality_eval,
@@ -1605,7 +1611,7 @@ Respond with ONLY the JSON, no extra text."""
     
     try:
         print("   Calling LLM to decide tool...")
-        response = llm.chat(messages=messages, timeout=10)  # 10 second timeout
+        response = llm.call(messages)  # 10 second timeout
         response_text = str(response).strip()
         print(f"   LLM response: {response_text[:100]}...")
         

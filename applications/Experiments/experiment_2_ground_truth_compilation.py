@@ -26,7 +26,8 @@ the +8.29 score delta and the "flawed evaluation" critique.
 Usage:
   python experiment_2_ground_truth_compilation.py \
       --dataset /path/to/requirement_code.jsonl \
-      --n_samples -1 \          # -1 = run ALL contracts
+      --n_samples -1 \
+      # (-1 = run ALL contracts)
       --output_dir ./results/gt_compilation
 """
 
@@ -245,15 +246,12 @@ def main():
     records = load_dataset(args.dataset, n_samples=args.n_samples, seed=args.seed)
     checker = SolidityCompilationChecker()
 
-    # py-solc-x is the primary backend; subprocess solc is the fallback.
-    # Abort only if NEITHER is available.
-    if not (checker._solcx_available or checker.solc_available):
+    if not checker.solc_available:
         print("ERROR: No Solidity compiler found.")
-        print("  Primary:  pip install py-solc-x  (recommended — handles all versions)")
-        print("  Fallback: npm install -g solc     (0.8.x only)")
+        print("  Install: npm install -g solc")
         sys.exit(1)
 
-    backend = "py-solc-x" if checker._solcx_available else "subprocess solc"
+    backend = "subprocess solc/solcjs"
     print(f"[compiler] Using {backend} backend")
 
     results = []

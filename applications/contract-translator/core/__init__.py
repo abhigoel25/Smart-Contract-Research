@@ -20,13 +20,19 @@ from .schemas import (
     UniversalContractSchema,
 )
 
-from .programs import (
-    UniversalContractParserProgram,
-    UniversalSolidityGeneratorProgram,
-    SecurityAuditorProgram,
-    ABIGeneratorProgram,
-    MCPServerGeneratorProgram,
-)
+# Legacy Program classes use old IBM Agentics LLM/Program API; guard so the
+# rest of the package loads cleanly when that API is unavailable.
+try:
+    from .programs import (
+        UniversalContractParserProgram,
+        UniversalSolidityGeneratorProgram,
+        SecurityAuditorProgram,
+        ABIGeneratorProgram,
+        MCPServerGeneratorProgram,
+    )
+    _programs_available = True
+except ImportError:
+    _programs_available = False
 
 from .task_builders import (
     create_parser_task_description,
