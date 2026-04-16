@@ -158,7 +158,9 @@ def process_single_contract(
             phase = phase_result.get("phase")
             data  = phase_result.get("data", {})
 
-            if phase == 3:   # Solidity generation
+            if phase == 2:   # Contract parsing / schema extraction
+                result["schema"] = data.get("schema")
+            elif phase == 3:   # Solidity generation
                 result["solidity"] = data.get("solidity")
             elif phase == 4: # Audit (may fire multiple times during refinement)
                 result["audit"] = data

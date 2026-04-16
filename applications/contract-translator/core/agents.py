@@ -93,6 +93,10 @@ def create_agents(crew_llm: CrewLLM, enable_reinforcement: bool = True) -> dict:
             "You enforce economic invariants (token supply conservation, escrow balance accounting), "
             "temporal logic (deadlines enforced with require(block.timestamp ...)), "
             "and access control (every sensitive function has a require()-backed modifier). "
+            "You NEVER name a function parameter the same as a contract-level state variable "
+            "(e.g. never use `owner` as a parameter if `address public owner` exists — use `tokenOwner` instead). "
+            "You NEVER declare a public state variable with the same name as an interface function "
+            "(e.g. never write `uint256 public totalSupply` when implementing IERC20 — use `uint256 private _totalSupply`). "
             "Your contracts are long, complete, and correct — a 300-line correct contract is "
             "far better to you than a 60-line stub."
         ),

@@ -254,8 +254,8 @@ CONTRACT SPECIFICATION
 EXTRACTED SCHEMA FIELDS:
 - Functions:    {', '.join(function_names) if function_names else 'derive from obligations and contract type'}
 - Variables:    {', '.join(variable_names) if variable_names else 'derive from financial terms and parties'}
-- States:       {', '.join(state_names) if state_names else 'derive from workflow lifecycle'}
-- Transitions:  {', '.join(state_transitions) if state_transitions else 'derive from obligations sequence'}
+- States:       {', '.join(state_names) if state_names else 'NONE — do NOT invent an enum state machine; implement direct access control and logic only'}
+- Transitions:  {', '.join(state_transitions) if state_transitions else 'NONE — no state transitions required; use modifiers/require() for access control only'}
 - Events:       {', '.join(events) if events else 'one per function action'}
 - Rules:        {'; '.join(logic_conditions) if logic_conditions else 'derive from special_terms and obligations'}
 
@@ -318,12 +318,15 @@ GENERATION PRINCIPLES
    Write the invariant as a comment above the contract and design all functions to preserve it.
    Test mentally: "If I call these functions in a hostile order, can I steal funds or mint tokens for free?"
 
-6. STATES = LIFECYCLE PHASES ONLY
-   States must represent the contract's lifecycle stages (Pending → Active → Completed → Cancelled).
+6. STATES = LIFECYCLE PHASES ONLY (and ONLY when the spec requires them)
+   IF the spec lists explicit state names: implement them as a Solidity enum representing lifecycle stages.
+   States must represent lifecycle phases (Pending → Active → Completed → Cancelled).
    Never name a state after an operation (Transfer, Approve, Deposit).
    Every state must be SET in at least one function and CHECKED in at least one modifier or require().
    Terminal states (Completed, Cancelled, Expired) must be reachable.
-   For tokens: do NOT block transfer/approve behind a state — users must be able to call them simultaneously.
+   For tokens: do NOT block transfer/approve behind a state machine — users must be able to call them at all times.
+   IF the spec has NO explicit state names (States: NONE): do NOT add an enum state machine.
+   For state-less contracts, use access control modifiers (onlyOwner, etc.) and inline require() checks directly — do not fabricate lifecycle states that were never asked for.
 
 7. ACCESS CONTROL IS NON-NEGOTIABLE
    Every function that changes critical parameters, transfers funds, or mints/burns tokens must have a modifier.
@@ -335,6 +338,25 @@ GENERATION PRINCIPLES
    Every function must either change state or transfer value or return computed data.
    Use require(condition, "message") — never if(condition) return.
    Emit events only after successful state/value changes; include all relevant parameters.
+
+9. AVOID IDENTIFIER SHADOWING IN PARAMETERS
+   NEVER name a function parameter the same as a contract-level state variable.
+   Common offenders that WILL cause "Identifier already declared" compile errors:
+   - Don't use `owner` as a parameter — use `tokenOwner`, `account`, or `addr` instead.
+   - Don't use `spender`, `sender`, `recipient` if you also have state variables of those names.
+   - Don't use `amount`, `balance`, `value` as parameter names in a contract that has state variables with those names.
+   Check every parameter name against the list of state variables before writing the function signature.
+
+10. AVOID COLLISIONS BETWEEN PUBLIC STATE VARIABLES AND INTERFACE FUNCTIONS
+    If a contract implements an interface (e.g. IERC20), NEVER declare a public state variable with
+    the same name as an interface function. The automatically-generated getter will clash.
+    Correct patterns:
+    - WRONG: `uint256 public totalSupply;` + implementing `function totalSupply() external view returns (uint256)`
+      → TWO declarations of the same identifier — compile error.
+    - RIGHT:  `uint256 private _totalSupply;` and return it from the required interface function.
+    - WRONG: `mapping(address => uint256) public balances;` if the interface also has `function balances(address) external view returns (uint256)`.
+    - RIGHT:  Use private/internal storage variables (prefixed with `_`) and expose them only via the required interface functions.
+    Apply this rule for ALL interface methods (`totalSupply`, `balanceOf`, `allowance`, etc.).
 
 ═══════════════════════════════════════
 OUTPUT FORMAT
@@ -771,7 +793,7 @@ B. Function Implementation Quality (Max 50 points):
     "missing_validation": ["functions needing validation"],
     "points": 0-50
   }},
-  "total_score": 0-100,
+  "score": 0-100,
   "evidence": ["specific code examples with line numbers"]
 }}
 ```
@@ -818,7 +840,7 @@ B. Function Parameter Quality (Max 40 points):
     "parameters_used": ["functions using all params"],
     "points": 0-40
   }},
-  "total_score": 0-100,
+  "score": 0-100,
   "evidence": ["specific examples from code"]
 }}
 ```
@@ -827,9 +849,10 @@ B. Function Parameter Quality (Max 40 points):
 METRIC 3: STATE MACHINE CORRECTNESS (0-100 points)
 ═══════════════════════════════════════════════════════════════════════════════
 
-**Calculate exact score. Example: 4 states × 8pts = 32, transitions 17pts, guards 12pts = 61.**
+**FIRST: Determine which scoring path applies based on the spec's `state_names` field.**
 
-**Scoring Rules:**
+─── PATH A: SPEC HAS EXPLICIT STATES (state_names is non-empty) ───────────────
+Use this path ONLY if the specification lists explicit state names (e.g. Pending, Active, Completed).
 
 A. State Definition (Max 25 points):
    - All expected states present in enum: +15 points
@@ -842,38 +865,64 @@ B. State Transitions (Max 50 points):
      * Has proper require() check: +10 points
      * Matches specification logic: +10 points
    - Missing transitions: -10 points each
-   - Invalid transitions possible: -10 points each
+   - Invalid transitions possible (unauthorized skips): -10 points each
 
 C. State Guards (Max 25 points):
    - Functions use state-based modifiers: +10 points
    - Functions use state require() checks: +10 points
    - No state bypass vulnerabilities: +5 points
 
-**Output Format:**
+─── PATH B: SPEC HAS NO EXPLICIT STATES (state_names is empty/null) ─────────
+Use this path if the specification does NOT list any state names.
+DO NOT invent lifecycle states ("Token Creation", "Active Trading", "Transfer", "Approval" etc.).
+DO NOT penalize the contract for lacking an enum — no enum is CORRECT here.
+
+A. Correctness of No-State Design (Max 40 points):
+   - Contract does NOT have an unnecessary enum state machine: +20 points
+     (if contract DOES have an enum with fabricated states like "TokenCreation": -15 points)
+   - No functions are gated behind an enum state that was not in the spec: +20 points
+
+B. Access Control as Transition Substitute (Max 35 points):
+   - onlyOwner or role-based modifiers present for admin functions: +15 points
+   - Inline require() checks enforce who can call what: +10 points
+   - Events emitted to log major state-changing operations: +10 points
+
+C. Guard Quality (Max 25 points):
+   - All external/public functions have appropriate access control: +10 points
+   - Input/boundary validation (zero-address, range checks, balance checks): +10 points
+   - No privilege escalation vulnerabilities: +5 points
+
+**Scoring Summary:**
+Path A max = 100. Path B max = 100.
+In both paths, score must reflect actual arithmetic — do not round to nearest 5.
+
+**Output Format (use regardless of path):**
 ```json
 {{
+  "state_machine_required": true/false,
+  "scoring_path": "A (explicit states)" or "B (no states in spec)",
   "state_definition": {{
-    "expected_states": ["list from spec"],
-    "defined_states": ["states in enum"],
+    "expected_states": ["states from spec, or [] if none"],
+    "defined_states": ["states in enum in code"],
     "state_variable_exists": true/false,
-    "extra_states": ["unnecessary states"],
-    "points": 0-25
+    "extra_states": ["fabricated states not in spec"],
+    "points": 0-25 (Path A) or 0-40 (Path B)
   }},
   "state_transitions": {{
-    "expected_transitions": ["list from spec"],
+    "expected_transitions": ["from spec, or [] if none"],
     "implemented_correctly": ["transitions with proper logic"],
     "missing_transitions": ["expected but not found"],
     "invalid_transitions_possible": ["security issues"],
-    "points": 0-50
+    "points": 0-50 (Path A) or 0-35 (Path B)
   }},
   "state_guards": {{
-    "functions_with_modifiers": ["functions using state modifiers"],
-    "functions_with_checks": ["functions using state requires"],
+    "functions_with_modifiers": ["functions using modifiers"],
+    "functions_with_checks": ["functions using require()"],
     "bypass_vulnerabilities": ["issues found"],
     "points": 0-25
   }},
-  "total_score": 0-100,
-  "evidence": ["specific code examples"]
+  "score": 0-100,
+  "evidence": ["specific code examples with line references"]
 }}
 ```
 
@@ -940,7 +989,7 @@ D. Conditional Logic (Max 20 points):
     "missing_conditions": ["conditions not implemented"],
     "points": 0-20
   }},
-  "total_score": 0-100,
+  "score": 0-100,
   "evidence": ["specific examples from code and spec"]
 }}
 ```
@@ -1011,7 +1060,7 @@ E. Documentation (Max 10 points):
     "clear_variable_names": true/false,
     "points": 0-10
   }},
-  "total_score": 0-100,
+  "score": 0-100,
   "evidence": ["specific examples"]
 }}
 ```

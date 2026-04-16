@@ -254,6 +254,8 @@ CRITICAL RULES (violating any of these means you have failed):
 - If the spec has temporal deadlines, enforce them with require(block.timestamp ...)
 - Access control modifiers must use require() that actually reverts on failure
 - Length target: 150-400 lines — a correct 300-line contract is far better than a 60-line stub
+- NEVER name a function parameter the same as a contract-level state variable (e.g. do not use `owner` as a param if `address public owner` exists — use `tokenOwner` or `account` instead). This causes "Identifier already declared" compile errors.
+- NEVER declare a public state variable with the same name as an interface function you are implementing (e.g. do NOT write `uint256 public totalSupply` when implementing IERC20 — use `uint256 private _totalSupply` and return it from the interface function). The auto-generated getter will clash with the interface function and cause a compile error.
 
 Read every line of the specification prompt. The MANDATORY sections are mandatory. Do not skip any."""
             ),

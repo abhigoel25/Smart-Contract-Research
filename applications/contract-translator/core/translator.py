@@ -991,10 +991,11 @@ class IBMAgenticContractTranslator:
                     "Valid JSON object with exactly these top-level keys: "
                     "metric_1_functional_completeness (object with score 0-100 and evidence), "
                     "metric_2_variable_fidelity (object with score 0-100 and evidence), "
-                    "metric_3_state_machine (object with score 0-100 and evidence), "
+                    "metric_3_state_machine (object with score 0-100, state_machine_required bool, scoring_path string, and evidence), "
                     "metric_4_business_logic (object with score 0-100 and evidence), "
                     "metric_5_code_quality (object with score 0-100 and evidence), "
                     "composite_score (object with final_score and grade). "
+                    "For metric_3: if spec has no explicit state_names, set state_machine_required=false and use Path B scoring. "
                     "Scores must be precise integers (e.g. 73 not 75). Return ONLY the JSON — no markdown."
                 ),
                 agent=self.quality_evaluator_agent
@@ -1210,10 +1211,11 @@ class IBMAgenticContractTranslator:
                     "Valid JSON object with exactly these top-level keys: "
                     "metric_1_functional_completeness (object with score 0-100 and evidence), "
                     "metric_2_variable_fidelity (object with score 0-100 and evidence), "
-                    "metric_3_state_machine (object with score 0-100 and evidence), "
+                    "metric_3_state_machine (object with score 0-100, state_machine_required bool, scoring_path string, and evidence), "
                     "metric_4_business_logic (object with score 0-100 and evidence), "
                     "metric_5_code_quality (object with score 0-100 and evidence), "
                     "composite_score (object with final_score and grade). "
+                    "For metric_3: if spec has no explicit state_names, set state_machine_required=false and use Path B scoring. "
                     "Scores must be precise integers (e.g. 73 not 75). Return ONLY the JSON — no markdown."
                 ),
                 agent=self.quality_evaluator_agent
@@ -1322,10 +1324,11 @@ class IBMAgenticContractTranslator:
                 "Valid JSON object with exactly these top-level keys: "
                 "metric_1_functional_completeness (object with score 0-100 and evidence), "
                 "metric_2_variable_fidelity (object with score 0-100 and evidence), "
-                "metric_3_state_machine (object with score 0-100 and evidence), "
+                "metric_3_state_machine (object with score 0-100, state_machine_required bool, scoring_path string, and evidence), "
                 "metric_4_business_logic (object with score 0-100 and evidence), "
                 "metric_5_code_quality (object with score 0-100 and evidence), "
                 "composite_score (object with final_score and grade). "
+                "For metric_3: if spec has no explicit state_names, set state_machine_required=false and use Path B scoring. "
                 "Scores must be precise integers (e.g. 73 not 75). Return ONLY the JSON — no markdown."
             ),
             agent=self.quality_evaluator_agent
