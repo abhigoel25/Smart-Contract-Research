@@ -68,6 +68,7 @@ from experiment_utils import (
     load_results,
     extract_scores,
     save_results,
+    append_result,
     compute_statistics,
 )
 from applications.translator import IBMAgenticContractTranslator
@@ -352,20 +353,37 @@ def print_debiased_report(results: List[Dict]) -> None:
     if orig_deltas:
         mean_debiased_delta = round(statistics.mean(orig_deltas), 2)
         print(f"  Debiased gap (this experiment): +{mean_debiased_delta:.2f} points")
-        reduction = 8.29 - mean_debiased_delta
-        pct_close  = reduction / 8.29 * 100
-        print(f"  Gap reduction:                  {reduction:.2f} points  ({pct_close:.1f}% of original gap)")
+        reduction = 8.29 - mean_debiased_delta          # positive = gap shrank, negative = gap widened
+        pct_change = abs(reduction) / 8.29 * 100
+        direction  = "reduction" if reduction >= 0 else "increase"
+        sign_str   = f"-{abs(reduction):.2f}" if reduction >= 0 else f"+{abs(reduction):.2f}"
+        print(f"  Gap {direction}:                  {sign_str} points  ({pct_change:.1f}% {'reduction' if reduction >= 0 else 'increase'} vs original gap)")
         print()
-        print(
-            f"  INTERPRETATION FOR REBUTTAL:\n"
-            f"  Under semantic equivalence scoring (which awards credit for\n"
-            f"  architectural deviations that preserve behaviour), the gap\n"
-            f"  between generated and ground-truth contracts narrows from\n"
-            f"  +8.29 to +{mean_debiased_delta:.2f} points — a {pct_close:.0f}% reduction.\n"
-            f"  This confirms Reviewer inVW's insight: the original gap is\n"
-            f"  driven by literal vs. semantic matching, not true quality\n"
-            f"  superiority of LLM-generated contracts."
-        )
+        if reduction >= 0:
+            # Gap shrank — supports reviewer's literal-matching critique
+            print(
+                f"  INTERPRETATION FOR REBUTTAL:\n"
+                f"  Under semantic equivalence scoring (which awards credit for\n"
+                f"  architectural deviations that preserve behaviour), the gap\n"
+                f"  between generated and ground-truth contracts narrows from\n"
+                f"  +8.29 to +{mean_debiased_delta:.2f} points — a {pct_change:.0f}% reduction.\n"
+                f"  This supports Reviewer inVW's insight: part of the original\n"
+                f"  gap is driven by literal vs. semantic matching."
+            )
+        else:
+            # Gap widened — refutes reviewer's critique
+            print(
+                f"  INTERPRETATION FOR REBUTTAL:\n"
+                f"  Under semantic equivalence scoring (which awards credit for\n"
+                f"  architectural deviations that preserve behaviour), the gap\n"
+                f"  between generated and ground-truth contracts widens from\n"
+                f"  +8.29 to +{mean_debiased_delta:.2f} points — a {pct_change:.0f}% increase.\n"
+                f"  This REFUTES Reviewer inVW's critique: even with a fairer\n"
+                f"  metric that gives ground-truth the benefit of the doubt,\n"
+                f"  the quality advantage of LLM-generated contracts grows.\n"
+                f"  The gap is not a literal-matching artifact — it reflects\n"
+                f"  genuine quality superiority of the generated contracts."
+            )
     print(f"{'='*65}\n")
 
 
@@ -423,6 +441,9 @@ def main():
 
     print(f"[debiased] Analysing {len(pairs)} matched generated ↔ ground-truth pairs\n")
 
+    debiased_path = output_dir / "debiased_analysis.jsonl"
+    debiased_path.parent.mkdir(parents=True, exist_ok=True)
+    open(debiased_path, "w").close()  # truncate for a fresh run
     analysis_results = []
     for i, (gen_r, record) in enumerate(pairs):
         print(f"  [{i+1}/{len(pairs)}] idx={record['index']}", end=" ", flush=True)
@@ -435,6 +456,7 @@ def main():
             run_llm_m4=not args.skip_llm_m4,
         )
         analysis_results.append(r)
+        append_result(r, debiased_path)
         delta = r.get("debiased_composite_delta")
         print(f"  orig_delta={r.get('debiased_composite_delta', '?')}  time={round(time.time()-t0,1)}s")
 

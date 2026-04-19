@@ -48,6 +48,26 @@ from pathlib import Path
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple
 
+
+def _venv_solc() -> str:
+    """Return path to solc inside the active venv, falling back to PATH."""
+    scripts_dir = Path(sys.executable).parent
+    for name in ("solc.exe", "solc"):
+        candidate = scripts_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return "solc"
+
+
+def _venv_slither() -> str:
+    """Return path to slither inside the active venv, falling back to PATH."""
+    scripts_dir = Path(sys.executable).parent
+    for name in ("slither.exe", "slither"):
+        candidate = scripts_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return "slither"
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -64,6 +84,7 @@ if _env_file.exists():
 from experiment_utils import (
     load_dataset,
     save_results,
+    append_result,
     extract_audit_info,
     compilation_success,
 )
@@ -79,10 +100,10 @@ SLITHER_SEVERITY_LEVELS = {"high", "medium", "low", "informational", "optimizati
 
 
 def check_slither_available() -> bool:
-    """Return True if slither is available on PATH."""
+    """Return True if slither is available in the active venv."""
     try:
         result = subprocess.run(
-            ["slither", "--version"],
+            [_venv_slither(), "--version"],
             capture_output=True, text=True, timeout=10,
         )
         return result.returncode == 0
@@ -121,20 +142,19 @@ def run_slither(solidity_code: str) -> Dict:
         base["error_message"] = "slither not installed"
         return base
 
-    # Write code to a temp file
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".sol", delete=False, encoding="utf-8"
-    ) as tmp:
-        tmp.write(solidity_code)
-        tmp_path = tmp.name
+    # Write code to a temp file in the CWD so crytic_compile sees a relative
+    # path with no drive letter (fixes Windows path-mangling bug in crytic_compile).
+    import uuid as _uuid
+    tmp_path = Path(f"_slither_tmp_{_uuid.uuid4().hex[:8]}.sol")
+    tmp_path.write_text(solidity_code, encoding="utf-8")
 
     try:
         result = subprocess.run(
             [
-                "slither", tmp_path,
+                _venv_slither(), str(tmp_path),
                 "--json", "-",                    # output JSON to stdout
-                "--solc-remaps", "",              # no remaps
                 "--disable-color",
+                "--solc", _venv_solc(),            # bypass broken system solc
             ],
             capture_output=True,
             text=True,
@@ -144,8 +164,14 @@ def run_slither(solidity_code: str) -> Dict:
         # Slither exits with code 1 even when it finds vulnerabilities (not an error)
         stdout = result.stdout.strip()
         if not stdout:
-            base["error_message"] = result.stderr[:300] if result.stderr else "no output"
-            return base
+            # Try stderr — some slither versions write JSON there instead
+            stderr = result.stderr.strip()
+            json_start = stderr.find("{")
+            if json_start != -1:
+                stdout = stderr[json_start:]
+            else:
+                base["error_message"] = stderr[:300] if stderr else "no output"
+                return base
 
         parsed = json.loads(stdout)
 
@@ -184,7 +210,7 @@ def run_slither(solidity_code: str) -> Dict:
         traceback.print_exc()
     finally:
         try:
-            os.unlink(tmp_path)
+            tmp_path.unlink(missing_ok=True)
         except OSError:
             pass
 
@@ -440,11 +466,19 @@ def main():
         model=args.model, enable_reinforcement=True, max_refinement_iterations=1
     )
 
+    slither_path = output_dir / "slither_results.jsonl"
+    slither_path.parent.mkdir(parents=True, exist_ok=True)
+    open(slither_path, "w").close()  # truncate for a fresh run
     results = []
     for i, record in enumerate(records):
         print(f"\n  [{i+1}/{len(records)}] Contract idx={record['index']}")
         r = process_one_contract(translator_pre, translator_post, record, checker)
         results.append(r)
+        _cr = dict(r)
+        for _phase in ("pre", "post"):
+            if isinstance(_cr.get(_phase), dict):
+                _cr[_phase] = {k: v for k, v in _cr[_phase].items() if k != "solidity"}
+        append_result(_cr, slither_path)
 
         pre_h  = (r["pre"].get("slither") or {}).get("high_count", "?")
         post_h = (r["post"].get("slither") or {}).get("high_count", "?")

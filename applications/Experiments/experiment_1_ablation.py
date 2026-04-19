@@ -75,6 +75,7 @@ from experiment_utils import (
     extract_audit_info,
     compilation_success,
     save_results,
+    append_result,
     compute_statistics,
     print_stats_table,
     evaluate_ground_truth_quality,
@@ -562,6 +563,9 @@ def run_condition(
     print(f"{'#'*70}\n")
 
     checker = SolidityCompilationChecker()
+    out_path = output_dir / f"condition_{label}.jsonl"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    open(out_path, "w").close()  # truncate for a fresh run
     results = []
 
     if condition_key == "A":
@@ -570,6 +574,7 @@ def run_condition(
             print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
             r = process_zero_shot(record, checker)
             results.append(r)
+            append_result(r, out_path)
             status = "✓" if not r["error"] else "✗"
             comp   = compilation_success(r["compilation"])
             print(f"{status}  compile={'Y' if comp else ('N' if comp is False else '?')}  "
@@ -580,6 +585,7 @@ def run_condition(
             print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
             r = process_single_llm_e(record, checker, model=model)
             results.append(r)
+            append_result(r, out_path)
             status = "✓" if not r["error"] else "✗"
             comp   = compilation_success(r["compilation"])
             scores = extract_scores(r.get("quality_evaluation"))
@@ -598,6 +604,7 @@ def run_condition(
             print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
             r = process_pipeline_contract(translator, record, label, checker)
             results.append(r)
+            append_result(r, out_path)
 
             scores = extract_scores(r.get("quality_evaluation"))
             status = "✓" if not r["error"] else "✗"
@@ -609,8 +616,7 @@ def run_condition(
                 f"time={r['processing_time']}s"
             )
 
-    # Save raw results
-    out_path = output_dir / f"condition_{label}.jsonl"
+    # Save raw results (re-write complete set for consistency)
     save_results(results, str(out_path))
 
     return results

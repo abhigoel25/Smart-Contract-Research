@@ -73,6 +73,7 @@ from experiment_utils import (
     extract_scores,
     compilation_success,
     save_results,
+    append_result,
     compute_statistics,
     print_stats_table,
     evaluate_ground_truth_quality,
@@ -361,6 +362,8 @@ def main():
     parser.add_argument("--seed",           type=int, default=42)
     parser.add_argument("--output_dir",     default="./results/contract_type")
     parser.add_argument("--model",          default="gpt-4o-mini")
+    parser.add_argument("--categories", nargs="+", default=None,
+                        help="Restrict to these category names (e.g. erc20 auction escrow voting crowdfund)")
     parser.add_argument("--composition_only", action="store_true",
                         help="Print dataset composition and exit (no LLM calls)")
     args = parser.parse_args()
@@ -390,6 +393,8 @@ def main():
 
     sampled: Dict[str, List[Dict]] = {}
     for cat, recs in by_category.items():
+        if args.categories and cat not in args.categories:
+            continue
         if len(recs) >= 5:   # skip categories with very few examples
             sampled[cat] = random.sample(recs, min(args.n_per_category, len(recs)))
 
@@ -413,11 +418,15 @@ def main():
         print(f"# Category: {nm}  (N={len(records)})")
         print(f"{'#'*65}\n")
 
+        cat_path = output_dir / f"results_{cat}.jsonl"
+        cat_path.parent.mkdir(parents=True, exist_ok=True)
+        open(cat_path, "w").close()  # truncate for a fresh run
         cat_results = []
         for i, record in enumerate(records):
             print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
             r = process_contract(translator, record, checker)
             cat_results.append(r)
+            append_result(r, cat_path)
 
             scores = extract_scores(r.get("quality_evaluation"))
             comp   = compilation_success(r.get("compilation"))

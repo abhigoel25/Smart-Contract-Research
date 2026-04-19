@@ -348,6 +348,13 @@ def save_results(results: List[Dict], output_path: str) -> None:
     print(f"[utils] Saved {len(results)} results → {output_path}")
 
 
+def append_result(result: Dict, output_path: str) -> None:
+    """Write a single result immediately to disk (crash-safe incremental save)."""
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(result, default=str) + "\n")
+
+
 def load_results(path: str) -> List[Dict]:
     """Load previously saved experiment results."""
     records = []

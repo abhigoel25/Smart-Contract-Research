@@ -59,6 +59,7 @@ from experiment_utils import (
     extract_scores,
     compilation_success,
     save_results,
+    append_result,
     compute_statistics,
     print_stats_table,
 )
@@ -293,12 +294,16 @@ def main():
         print(f"{'#'*60}\n")
 
         translator = build_translator_at_temperature(temp, args.model)
+        t_path = output_dir / f"temperature_{temp}.jsonl"
+        t_path.parent.mkdir(parents=True, exist_ok=True)
+        open(t_path, "w").close()  # truncate for a fresh run
         results    = []
 
         for i, record in enumerate(records):
             print(f"  [{i+1}/{len(records)}] idx={record['index']}", end=" ", flush=True)
             r = process_one(translator, record, temp, checker)
             results.append(r)
+            append_result(r, t_path)
             scores = extract_scores(r.get("quality_evaluation"))
             comp   = compilation_success(r.get("compilation"))
             print(

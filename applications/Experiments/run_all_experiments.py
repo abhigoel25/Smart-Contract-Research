@@ -70,7 +70,13 @@ def run_experiment(
     print(f"{'#'*70}\n")
 
     t0 = time.time()
-    result = subprocess.run(cmd, text=True)
+    try:
+        result = subprocess.run(cmd, text=True)
+    except KeyboardInterrupt:
+        elapsed = round(time.time() - t0, 1)
+        print(f"\n⚠ Interrupted during: {label} (after {elapsed}s)")
+        print("  Results written up to the last completed contract are saved to disk.")
+        raise
     elapsed = round(time.time() - t0, 1)
 
     if result.returncode == 0:
@@ -292,4 +298,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠ Run cancelled by user (Ctrl+C).")
+        print("  Any fully completed contracts have been saved incrementally to disk.")
+        print("  Re-run with --ablation_conditions <remaining> to continue from where you left off.")
+        sys.exit(0)

@@ -55,7 +55,7 @@ if _env_file.exists():
             _k, _, _v = _line.partition("=")
             os.environ.setdefault(_k.strip(), _v.strip())
 
-from experiment_utils import load_dataset, save_results
+from experiment_utils import load_dataset, save_results, append_result
 from applications.solidity_compiler import SolidityCompilationChecker
 
 
@@ -254,6 +254,9 @@ def main():
     backend = "subprocess solc/solcjs"
     print(f"[compiler] Using {backend} backend")
 
+    out_path = output_dir / "gt_compilation_results.jsonl"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    open(out_path, "w").close()  # truncate for a fresh run
     results = []
     t0 = time.time()
 
@@ -263,6 +266,7 @@ def main():
         )
         r = analyse_one_contract(record, checker)
         results.append(r)
+        append_result(r, out_path)
         print(
             f"  pragma={r['pragma'] or 'none':<20} "
             f"bucket={r['version_bucket']:<8} "
@@ -272,8 +276,7 @@ def main():
     elapsed = round(time.time() - t0, 1)
     print(f"\n  Finished {len(results)} contracts in {elapsed}s")
 
-    # Save raw results
-    out_path = output_dir / "gt_compilation_results.jsonl"
+    # Save raw results (re-write complete set for consistency)
     save_results(results, str(out_path))
 
     # Save summary JSON
