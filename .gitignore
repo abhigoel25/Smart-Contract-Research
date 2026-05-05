@@ -51,3 +51,7 @@ applications/Experiments/compilation_output
 applications/Experiments/compilation_output_*
 applications/Experiments/results
 applications/compilation_output
+
+smarteval/contracts
+smarteval/requirement_fsm_code.jsonl
+smarteval/smarteval_contracts.jsonl
