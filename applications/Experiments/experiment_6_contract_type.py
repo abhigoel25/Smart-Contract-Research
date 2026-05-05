@@ -42,17 +42,17 @@ Usage:
       --model gpt-4o-mini
 """
 
+import argparse
+import json
 import os
 import re
-import sys
-import json
-import time
-import argparse
-import tempfile
-import traceback
 import statistics
-from pathlib import Path
+import sys
+import tempfile
+import time
+import traceback
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -69,46 +69,120 @@ if _env_file.exists():
             os.environ.setdefault(_k.strip(), _v.strip())
 
 from experiment_utils import (
-    load_dataset,
-    extract_scores,
-    compilation_success,
-    save_results,
     append_result,
-    compute_statistics,
-    print_stats_table,
-    evaluate_ground_truth_quality,
     classify_error_modes,
+    compilation_success,
+    compute_statistics,
+    evaluate_ground_truth_quality,
+    extract_scores,
+    load_dataset,
+    print_stats_table,
+    save_results,
 )
+
 from applications.solidity_compiler import SolidityCompilationChecker
 from applications.translator import IBMAgenticContractTranslator
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Contract-type taxonomy
 # ────────────────────────────────────────────────────────────────────────────
 
 CATEGORY_KEYWORDS: Dict[str, List[str]] = {
-    "erc20":       ["erc20", "erc-20", "fungible token", "token transfer",
-                    "transferfrom", "allowance", "approve", "mint", "burn",
-                    "total supply", "balanceof"],
-    "erc721":      ["erc721", "erc-721", "nft", "non-fungible", "tokenuRI",
-                    "safetransfer", "ownerof", "tokenid", "metadata"],
-    "escrow":      ["escrow", "third party hold", "release funds", "arbitrat",
-                    "deposit and release", "intermediary", "locked funds"],
-    "auction":     ["auction", "bid", "highest bidder", "reserve price",
-                    "lot", "winner", "auction end", "place bid"],
-    "voting":      ["vote", "ballot", "proposal", "quorum", "delegate",
-                    "governance", "governance token", "cast vote", "tally"],
-    "access_ctrl": ["role", "permission", "whitelist", "blacklist",
-                    "grant role", "revoke role", "access control",
-                    "onlyowner", "only owner", "only admin"],
-    "timelock":    ["timelock", "time lock", "time-lock", "delay", "schedule",
-                    "execute after", "queued", "cancel pending"],
-    "multisig":    ["multi-sig", "multisig", "multi-signature",
-                    "m-of-n", "threshold", "multiple approvals",
-                    "require confirmations"],
-    "crowdfund":   ["crowdfund", "fundraise", "fundraising", "campaign goal",
-                    "pledge", "contributor", "refund if goal", "crowdsale"],
+    "erc20": [
+        "erc20",
+        "erc-20",
+        "fungible token",
+        "token transfer",
+        "transferfrom",
+        "allowance",
+        "approve",
+        "mint",
+        "burn",
+        "total supply",
+        "balanceof",
+    ],
+    "erc721": [
+        "erc721",
+        "erc-721",
+        "nft",
+        "non-fungible",
+        "tokenuRI",
+        "safetransfer",
+        "ownerof",
+        "tokenid",
+        "metadata",
+    ],
+    "escrow": [
+        "escrow",
+        "third party hold",
+        "release funds",
+        "arbitrat",
+        "deposit and release",
+        "intermediary",
+        "locked funds",
+    ],
+    "auction": [
+        "auction",
+        "bid",
+        "highest bidder",
+        "reserve price",
+        "lot",
+        "winner",
+        "auction end",
+        "place bid",
+    ],
+    "voting": [
+        "vote",
+        "ballot",
+        "proposal",
+        "quorum",
+        "delegate",
+        "governance",
+        "governance token",
+        "cast vote",
+        "tally",
+    ],
+    "access_ctrl": [
+        "role",
+        "permission",
+        "whitelist",
+        "blacklist",
+        "grant role",
+        "revoke role",
+        "access control",
+        "onlyowner",
+        "only owner",
+        "only admin",
+    ],
+    "timelock": [
+        "timelock",
+        "time lock",
+        "time-lock",
+        "delay",
+        "schedule",
+        "execute after",
+        "queued",
+        "cancel pending",
+    ],
+    "multisig": [
+        "multi-sig",
+        "multisig",
+        "multi-signature",
+        "m-of-n",
+        "threshold",
+        "multiple approvals",
+        "require confirmations",
+    ],
+    "crowdfund": [
+        "crowdfund",
+        "fundraise",
+        "fundraising",
+        "campaign goal",
+        "pledge",
+        "contributor",
+        "refund if goal",
+        "crowdsale",
+    ],
 }
 
 
@@ -140,6 +214,7 @@ def categorise_dataset(records: List[Dict]) -> Dict[str, List[Dict]]:
 # Per-contract processing (mirrors experiment_1 conditions B/C/D)
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def process_contract(
     translator: IBMAgenticContractTranslator,
     record: Dict,
@@ -153,17 +228,17 @@ def process_contract(
         tmp_path = tmp.name
 
     result = {
-        "index":                         record["index"],
-        "contract_type":                 record.get("contract_type", "unknown"),
-        "requirement":                   record["requirement"][:200],
-        "solidity":                      None,
-        "compilation":                   None,
-        "ground_truth_compilation":      None,
-        "quality_evaluation":            None,
+        "index": record["index"],
+        "contract_type": record.get("contract_type", "unknown"),
+        "requirement": record["requirement"][:200],
+        "solidity": None,
+        "compilation": None,
+        "ground_truth_compilation": None,
+        "quality_evaluation": None,
         "ground_truth_quality_evaluation": None,
-        "audit_severity":                None,
-        "processing_time":               None,
-        "error":                         None,
+        "audit_severity": None,
+        "processing_time": None,
+        "error": None,
     }
 
     t0 = time.time()
@@ -176,7 +251,7 @@ def process_contract(
             use_agentic_pipeline=True,
         ):
             phase = phase_out.get("phase")
-            data  = phase_out.get("data", {})
+            data = phase_out.get("data", {})
 
             if phase == 3:
                 result["solidity"] = data.get("solidity")
@@ -218,6 +293,7 @@ def process_contract(
 # Per-category statistics
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def stats_for(results: List[Dict]) -> Dict:
     """Lightweight stat dict for a list of results within one category."""
     composites, compile_flags = [], []
@@ -239,20 +315,25 @@ def stats_for(results: List[Dict]) -> Dict:
         if c is not None:
             compile_flags.append(int(c))
 
-    def _avg(lst): return round(statistics.mean(lst), 2) if lst else None
-    def _std(lst): return round(statistics.stdev(lst), 2) if len(lst) > 1 else 0.0
+    def _avg(lst):
+        return round(statistics.mean(lst), 2) if lst else None
+
+    def _std(lst):
+        return round(statistics.stdev(lst), 2) if len(lst) > 1 else 0.0
 
     return {
-        "n":              len(results),
-        "n_errors":       errors,
+        "n": len(results),
+        "n_errors": errors,
         "composite_mean": _avg(composites),
-        "composite_std":  _std(composites),
-        "m1_mean":        _avg(m1s),
-        "m2_mean":        _avg(m2s),
-        "m3_mean":        _avg(m3s),
-        "m4_mean":        _avg(m4s),
-        "m5_mean":        _avg(m5s),
-        "compilation_rate": round(sum(compile_flags) / len(compile_flags), 3) if compile_flags else None,
+        "composite_std": _std(composites),
+        "m1_mean": _avg(m1s),
+        "m2_mean": _avg(m2s),
+        "m3_mean": _avg(m3s),
+        "m4_mean": _avg(m4s),
+        "m5_mean": _avg(m5s),
+        "compilation_rate": (
+            round(sum(compile_flags) / len(compile_flags), 3) if compile_flags else None
+        ),
     }
 
 
@@ -261,16 +342,16 @@ def stats_for(results: List[Dict]) -> Dict:
 # ────────────────────────────────────────────────────────────────────────────
 
 CATEGORY_DISPLAY = {
-    "erc20":       "ERC-20 Token",
-    "erc721":      "ERC-721 NFT",
-    "escrow":      "Escrow",
-    "auction":     "Auction",
-    "voting":      "Voting / Governance",
+    "erc20": "ERC-20 Token",
+    "erc721": "ERC-721 NFT",
+    "escrow": "Escrow",
+    "auction": "Auction",
+    "voting": "Voting / Governance",
     "access_ctrl": "Access Control",
-    "timelock":    "Timelock",
-    "multisig":    "Multi-Sig Wallet",
-    "crowdfund":   "Crowdfund",
-    "general":     "General / Other",
+    "timelock": "Timelock",
+    "multisig": "Multi-Sig Wallet",
+    "crowdfund": "Crowdfund",
+    "general": "General / Other",
 }
 
 
@@ -286,20 +367,26 @@ def print_type_report(category_stats: Dict[str, Dict]) -> None:
 
     all_composites = []
     for cat in sorted(category_stats):
-        s   = category_stats[cat]
-        nm  = CATEGORY_DISPLAY.get(cat, cat)
-        n   = s["n"]
+        s = category_stats[cat]
+        nm = CATEGORY_DISPLAY.get(cat, cat)
+        n = s["n"]
         avg = f"{s['composite_mean']:.2f}" if s["composite_mean"] is not None else "N/A"
-        std = f"{s['composite_std']:.2f}"  if s["composite_std"]  is not None else "N/A"
-        cr  = f"{s['compilation_rate']*100:.1f}%" if s["compilation_rate"] is not None else "N/A"
-        m1  = f"{s['m1_mean']:.1f}" if s["m1_mean"] is not None else "N/A"
-        m3  = f"{s['m3_mean']:.1f}" if s["m3_mean"] is not None else "N/A"
-        m4  = f"{s['m4_mean']:.1f}" if s["m4_mean"] is not None else "N/A"
+        std = f"{s['composite_std']:.2f}" if s["composite_std"] is not None else "N/A"
+        cr = (
+            f"{s['compilation_rate']*100:.1f}%"
+            if s["compilation_rate"] is not None
+            else "N/A"
+        )
+        m1 = f"{s['m1_mean']:.1f}" if s["m1_mean"] is not None else "N/A"
+        m3 = f"{s['m3_mean']:.1f}" if s["m3_mean"] is not None else "N/A"
+        m4 = f"{s['m4_mean']:.1f}" if s["m4_mean"] is not None else "N/A"
 
         if s["composite_mean"] is not None:
             all_composites.append(s["composite_mean"])
 
-        print(f"  {nm:<24} {n:>4}  {avg:>10}  {std:>6}  {cr:>9}  {m1:>6}  {m3:>6}  {m4:>6}")
+        print(
+            f"  {nm:<24} {n:>4}  {avg:>10}  {std:>6}  {cr:>9}  {m1:>6}  {m3:>6}  {m4:>6}"
+        )
 
     print(f"  {'─'*80}")
 
@@ -315,8 +402,12 @@ def print_type_report(category_stats: Dict[str, Dict]) -> None:
                 f"    Results are not driven by a single easy contract category."
             )
         else:
-            best = max(category_stats, key=lambda c: category_stats[c]["composite_mean"] or 0)
-            worst = min(category_stats, key=lambda c: category_stats[c]["composite_mean"] or 999)
+            best = max(
+                category_stats, key=lambda c: category_stats[c]["composite_mean"] or 0
+            )
+            worst = min(
+                category_stats, key=lambda c: category_stats[c]["composite_mean"] or 999
+            )
             print(
                 f"\n  → Best category:  {CATEGORY_DISPLAY.get(best, best)} "
                 f"({category_stats[best]['composite_mean']:.2f})\n"
@@ -333,15 +424,16 @@ def print_type_report(category_stats: Dict[str, Dict]) -> None:
 # Dataset composition table (no LLM needed)
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def print_dataset_composition(by_category: Dict[str, List[Dict]]) -> None:
     total = sum(len(v) for v in by_category.values())
     print(f"\n  DATASET COMPOSITION BY CONTRACT TYPE  (full dataset)")
     print(f"  {'Category':<24} {'N':>6}  {'%':>7}")
     print(f"  {'─'*40}")
     for cat in sorted(by_category, key=lambda c: -len(by_category[c])):
-        n   = len(by_category[cat])
+        n = len(by_category[cat])
         pct = n / total * 100
-        nm  = CATEGORY_DISPLAY.get(cat, cat)
+        nm = CATEGORY_DISPLAY.get(cat, cat)
         print(f"  {nm:<24} {n:>6}  {pct:>6.1f}%")
     print(f"  {'─'*40}")
     print(f"  {'Total':<24} {total:>6}")
@@ -352,20 +444,32 @@ def print_dataset_composition(by_category: Dict[str, List[Dict]]) -> None:
 # Entry point
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Cross-contract-type generalization analysis"
     )
-    parser.add_argument("--dataset",        default="requirement_code.jsonl")
-    parser.add_argument("--n_per_category", type=int, default=30,
-                        help="Contracts to sample per category (default: 30)")
-    parser.add_argument("--seed",           type=int, default=42)
-    parser.add_argument("--output_dir",     default="./results/contract_type")
-    parser.add_argument("--model",          default="gpt-4o-mini")
-    parser.add_argument("--categories", nargs="+", default=None,
-                        help="Restrict to these category names (e.g. erc20 auction escrow voting crowdfund)")
-    parser.add_argument("--composition_only", action="store_true",
-                        help="Print dataset composition and exit (no LLM calls)")
+    parser.add_argument("--dataset", default="requirement_code.jsonl")
+    parser.add_argument(
+        "--n_per_category",
+        type=int,
+        default=30,
+        help="Contracts to sample per category (default: 30)",
+    )
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output_dir", default="./results/contract_type")
+    parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument(
+        "--categories",
+        nargs="+",
+        default=None,
+        help="Restrict to these category names (e.g. erc20 auction escrow voting crowdfund)",
+    )
+    parser.add_argument(
+        "--composition_only",
+        action="store_true",
+        help="Print dataset composition and exit (no LLM calls)",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -382,31 +486,35 @@ def main():
         with open(comp_path, "w") as f:
             json.dump(
                 {cat: len(recs) for cat, recs in by_category.items()},
-                f, indent=2,
+                f,
+                indent=2,
             )
         print(f"[contract_type] Composition saved → {comp_path}")
         return
 
     # Sample up to n_per_category from each category
     import random
+
     random.seed(args.seed)
 
     sampled: Dict[str, List[Dict]] = {}
     for cat, recs in by_category.items():
         if args.categories and cat not in args.categories:
             continue
-        if len(recs) >= 5:   # skip categories with very few examples
+        if len(recs) >= 5:  # skip categories with very few examples
             sampled[cat] = random.sample(recs, min(args.n_per_category, len(recs)))
 
     total_contracts = sum(len(v) for v in sampled.values())
-    print(f"[contract_type] Processing {total_contracts} contracts "
-          f"across {len(sampled)} categories\n")
+    print(
+        f"[contract_type] Processing {total_contracts} contracts "
+        f"across {len(sampled)} categories\n"
+    )
 
     checker = SolidityCompilationChecker()
     translator = IBMAgenticContractTranslator(
         model=args.model,
         enable_reinforcement=True,
-        max_refinement_iterations=1,   # paper config (Condition C)
+        max_refinement_iterations=1,  # paper config (Condition C)
     )
 
     all_results: Dict[str, List[Dict]] = {}
@@ -423,13 +531,17 @@ def main():
         open(cat_path, "w").close()  # truncate for a fresh run
         cat_results = []
         for i, record in enumerate(records):
-            print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
+            print(
+                f"  [{i+1}/{len(records)}] idx={record['index']} ...",
+                end=" ",
+                flush=True,
+            )
             r = process_contract(translator, record, checker)
             cat_results.append(r)
             append_result(r, cat_path)
 
             scores = extract_scores(r.get("quality_evaluation"))
-            comp   = compilation_success(r.get("compilation"))
+            comp = compilation_success(r.get("compilation"))
             status = "✓" if not r["error"] else "✗"
             print(
                 f"{status}  score={scores['composite']:.1f}  "
@@ -450,11 +562,13 @@ def main():
 
     # Save summary JSON
     summary = {
-        "model":          args.model,
+        "model": args.model,
         "n_per_category": args.n_per_category,
-        "seed":           args.seed,
-        "categories":     category_stats,
-        "dataset_composition": {cat: len(by_category.get(cat, [])) for cat in CATEGORY_KEYWORDS},
+        "seed": args.seed,
+        "categories": category_stats,
+        "dataset_composition": {
+            cat: len(by_category.get(cat, [])) for cat in CATEGORY_KEYWORDS
+        },
     }
     summary_path = output_dir / "contract_type_summary.json"
     with open(summary_path, "w") as f:

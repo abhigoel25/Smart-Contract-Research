@@ -44,15 +44,15 @@ Usage:
       --seeds 42 123 999
 """
 
+import argparse
+import json
 import os
 import sys
-import json
-import time
-import argparse
-import traceback
 import tempfile
+import time
+import traceback
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 # ── Make the application package importable ──────────────────────────────────
 # parents[2] is the workspace root so 'from applications.*' imports resolve.
@@ -70,22 +70,22 @@ if _env_file.exists():
             os.environ.setdefault(_k.strip(), _v.strip())
 
 from experiment_utils import (
-    load_dataset,
-    extract_scores,
-    extract_audit_info,
-    compilation_success,
-    save_results,
     append_result,
-    compute_statistics,
-    print_stats_table,
-    evaluate_ground_truth_quality,
     classify_error_modes,
+    compilation_success,
     compute_pairwise_significance,
+    compute_statistics,
+    evaluate_ground_truth_quality,
+    extract_audit_info,
+    extract_scores,
     get_raw_scores,
+    load_dataset,
+    print_stats_table,
+    save_results,
 )
+
 from applications.solidity_compiler import SolidityCompilationChecker
 from applications.translator import IBMAgenticContractTranslator
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Condition A: Zero-shot baseline (direct OpenAI call, no agents)
@@ -159,9 +159,13 @@ def process_zero_shot(record: Dict, checker: SolidityCompilationChecker) -> Dict
         # We build a minimal schema from the requirement text since Phase 2
         # (contract parsing) is not run in the zero-shot baseline.
         try:
+            from crewai import LLM as CrewLLM
+            from crewai import Agent, Crew, Task
+
+            from applications.task_builders import (
+                create_quality_evaluation_task_description,
+            )
             from applications.translator import IBMAgenticContractTranslator
-            from applications.task_builders import create_quality_evaluation_task_description
-            from crewai import Agent, Task, Crew, LLM as CrewLLM
 
             model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
             crew_llm = CrewLLM(
@@ -200,8 +204,10 @@ def process_zero_shot(record: Dict, checker: SolidityCompilationChecker) -> Dict
             eval_crew = Crew(agents=[eval_agent], tasks=[eval_task], verbose=False)
             raw = str(eval_crew.kickoff())
 
-            import re as _re, json as _json
-            m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+            import json as _json
+            import re as _re
+
+            m = _re.search(r"\{.*\}", raw, _re.DOTALL)
             if m:
                 result["quality_evaluation"] = _json.loads(m.group())
         except Exception as eval_exc:
@@ -273,9 +279,10 @@ def run_single_llm_e(
     Condition E: two sequential GPT calls — schema extraction then code generation.
     No agents, no audit, no reinforcement.  Returns (solidity_code, schema_dict).
     """
-    import openai
-    import re as _re
     import json as _json
+    import re as _re
+
+    import openai
 
     client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -284,16 +291,21 @@ def run_single_llm_e(
         client.chat.completions.create(
             model=model,
             temperature=0.3,
-            messages=[{
-                "role": "user",
-                "content": SCHEMA_EXTRACTION_PROMPT.format(requirement=requirement),
-            }],
-        ).choices[0].message.content or "{}"
+            messages=[
+                {
+                    "role": "user",
+                    "content": SCHEMA_EXTRACTION_PROMPT.format(requirement=requirement),
+                }
+            ],
+        )
+        .choices[0]
+        .message.content
+        or "{}"
     )
 
     schema: Dict = {}
     try:
-        m = _re.search(r'\{.*\}', schema_raw, _re.DOTALL)
+        m = _re.search(r"\{.*\}", schema_raw, _re.DOTALL)
         if m:
             schema = _json.loads(m.group())
     except Exception:
@@ -304,14 +316,19 @@ def run_single_llm_e(
         client.chat.completions.create(
             model=model,
             temperature=0.7,
-            messages=[{
-                "role": "user",
-                "content": SINGLE_LLM_GENERATE_PROMPT.format(
-                    requirement=requirement,
-                    schema=_json.dumps(schema, indent=2),
-                ),
-            }],
-        ).choices[0].message.content or ""
+            messages=[
+                {
+                    "role": "user",
+                    "content": SINGLE_LLM_GENERATE_PROMPT.format(
+                        requirement=requirement,
+                        schema=_json.dumps(schema, indent=2),
+                    ),
+                }
+            ],
+        )
+        .choices[0]
+        .message.content
+        or ""
     )
 
     # Strip markdown fences if present
@@ -355,8 +372,12 @@ def process_single_llm_e(
 
         # Quality evaluation — same standalone crew as condition A
         try:
-            from applications.task_builders import create_quality_evaluation_task_description
-            from crewai import Agent, Task, Crew, LLM as CrewLLM
+            from crewai import LLM as CrewLLM
+            from crewai import Agent, Crew, Task
+
+            from applications.task_builders import (
+                create_quality_evaluation_task_description,
+            )
 
             crew_llm = CrewLLM(
                 model=model,
@@ -374,11 +395,15 @@ def process_single_llm_e(
                 verbose=False,
                 allow_delegation=False,
             )
-            eval_schema = schema if schema else {
-                "contract_type": "unknown",
-                "conditions": {},
-                "raw_requirement": record["requirement"][:500],
-            }
+            eval_schema = (
+                schema
+                if schema
+                else {
+                    "contract_type": "unknown",
+                    "conditions": {},
+                    "raw_requirement": record["requirement"][:500],
+                }
+            )
             task_desc = create_quality_evaluation_task_description(
                 solidity_code=solidity,
                 schema=eval_schema,
@@ -392,8 +417,10 @@ def process_single_llm_e(
             eval_crew = Crew(agents=[eval_agent], tasks=[eval_task], verbose=False)
             raw = str(eval_crew.kickoff())
 
-            import re as _re2, json as _json2
-            m = _re2.search(r'\{.*\}', raw, _re2.DOTALL)
+            import json as _json2
+            import re as _re2
+
+            m = _re2.search(r"\{.*\}", raw, _re2.DOTALL)
             if m:
                 result["quality_evaluation"] = _json2.loads(m.group())
         except Exception as eval_exc:
@@ -416,6 +443,7 @@ def process_single_llm_e(
 # ────────────────────────────────────────────────────────────────────────────
 # Conditions B / C / D: full pipeline variants
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def process_pipeline_contract(
     translator: IBMAgenticContractTranslator,
@@ -458,7 +486,7 @@ def process_pipeline_contract(
             use_agentic_pipeline=True,
         ):
             phase = phase_out.get("phase")
-            data  = phase_out.get("data", {})
+            data = phase_out.get("data", {})
 
             if phase == 3:
                 result["solidity"] = data.get("solidity")
@@ -514,7 +542,7 @@ CONDITION_CONFIGS = {
     "A": {
         "label": "A_zero_shot",
         "description": "Zero-shot baseline (single GPT-4o-mini call, no agents)",
-        "enable_reinforcement": None,   # N/A — handled separately
+        "enable_reinforcement": None,  # N/A — handled separately
         "max_iterations": None,
     },
     "B": {
@@ -538,7 +566,7 @@ CONDITION_CONFIGS = {
     "E": {
         "label": "E_single_llm",
         "description": "Schema-structured prompt, single LLM (no agent orchestration)",
-        "enable_reinforcement": None,   # N/A — no pipeline
+        "enable_reinforcement": None,  # N/A — no pipeline
         "max_iterations": None,
     },
 }
@@ -553,9 +581,9 @@ def run_condition(
     """
     Execute all records for one experimental condition and save results.
     """
-    cfg   = CONDITION_CONFIGS[condition_key]
+    cfg = CONDITION_CONFIGS[condition_key]
     label = cfg["label"]
-    desc  = cfg["description"]
+    desc = cfg["description"]
 
     print(f"\n{'#'*70}")
     print(f"# Condition {condition_key}: {desc}")
@@ -571,27 +599,39 @@ def run_condition(
     if condition_key == "A":
         # Zero-shot — no translator needed
         for i, record in enumerate(records):
-            print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
+            print(
+                f"  [{i+1}/{len(records)}] idx={record['index']} ...",
+                end=" ",
+                flush=True,
+            )
             r = process_zero_shot(record, checker)
             results.append(r)
             append_result(r, out_path)
             status = "✓" if not r["error"] else "✗"
-            comp   = compilation_success(r["compilation"])
-            print(f"{status}  compile={'Y' if comp else ('N' if comp is False else '?')}  "
-                  f"time={r['processing_time']}s")
+            comp = compilation_success(r["compilation"])
+            print(
+                f"{status}  compile={'Y' if comp else ('N' if comp is False else '?')}  "
+                f"time={r['processing_time']}s"
+            )
     elif condition_key == "E":
         # Single-LLM structured prompt — no translator needed
         for i, record in enumerate(records):
-            print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
+            print(
+                f"  [{i+1}/{len(records)}] idx={record['index']} ...",
+                end=" ",
+                flush=True,
+            )
             r = process_single_llm_e(record, checker, model=model)
             results.append(r)
             append_result(r, out_path)
             status = "✓" if not r["error"] else "✗"
-            comp   = compilation_success(r["compilation"])
+            comp = compilation_success(r["compilation"])
             scores = extract_scores(r.get("quality_evaluation"))
-            print(f"{status}  score={scores['composite']:.1f}  "
-                  f"compile={'Y' if comp else ('N' if comp is False else '?')}  "
-                  f"time={r['processing_time']}s")
+            print(
+                f"{status}  score={scores['composite']:.1f}  "
+                f"compile={'Y' if comp else ('N' if comp is False else '?')}  "
+                f"time={r['processing_time']}s"
+            )
     else:
         # Full pipeline conditions B / C / D
         translator = IBMAgenticContractTranslator(
@@ -601,14 +641,18 @@ def run_condition(
         )
 
         for i, record in enumerate(records):
-            print(f"  [{i+1}/{len(records)}] idx={record['index']} ...", end=" ", flush=True)
+            print(
+                f"  [{i+1}/{len(records)}] idx={record['index']} ...",
+                end=" ",
+                flush=True,
+            )
             r = process_pipeline_contract(translator, record, label, checker)
             results.append(r)
             append_result(r, out_path)
 
             scores = extract_scores(r.get("quality_evaluation"))
             status = "✓" if not r["error"] else "✗"
-            comp   = compilation_success(r.get("compilation"))
+            comp = compilation_success(r.get("compilation"))
             print(
                 f"{status}  score={scores['composite']:.1f}  "
                 f"compile={'Y' if comp else ('N' if comp is False else '?')}  "
@@ -626,6 +670,7 @@ def run_condition(
 # Summary table
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def print_ablation_summary(
     all_condition_results: Dict[str, List[Dict]],
     seed_stability: Optional[Dict] = None,
@@ -637,7 +682,9 @@ def print_ablation_summary(
         all_condition_results: {condition_key: [results]}
         seed_stability: optional cross-seed stats dict from multi-seed run
     """
-    def _fmt(v): return f"{v:.2f}" if v is not None else "N/A"
+
+    def _fmt(v):
+        return f"{v:.2f}" if v is not None else "N/A"
 
     ref_results = all_condition_results.get("C")
 
@@ -651,18 +698,18 @@ def print_ablation_summary(
     print("-" * 100)
 
     for key, results in all_condition_results.items():
-        cfg   = CONDITION_CONFIGS[key]
+        cfg = CONDITION_CONFIGS[key]
         stats = compute_statistics(results)
 
-        comp_rate  = stats.get("compilation_rate")
-        comp_str   = f"{comp_rate*100:.1f}%" if comp_rate is not None else "N/A"
+        comp_rate = stats.get("compilation_rate")
+        comp_str = f"{comp_rate*100:.1f}%" if comp_rate is not None else "N/A"
         score_mean = stats["composite"]["mean"]
-        score_std  = stats["composite"]["std"]
-        m1_mean    = stats["m1_functional"]["mean"]
-        m3_mean    = stats["m3_state_machine"]["mean"]
-        m4_mean    = stats["m4_business_logic"]["mean"]
+        score_std = stats["composite"]["std"]
+        m1_mean = stats["m1_functional"]["mean"]
+        m3_mean = stats["m3_state_machine"]["mean"]
+        m4_mean = stats["m4_business_logic"]["mean"]
         label = cfg["label"]
-        n     = stats["n_total"] - stats["n_errors"]
+        n = stats["n_total"] - stats["n_errors"]
 
         # Pairwise significance vs reference condition C
         if key == "C":
@@ -670,10 +717,10 @@ def print_ablation_summary(
         elif ref_results:
             sig = compute_pairwise_significance(results, ref_results)
             comp_info = sig.get("composite", {})
-            p_t    = comp_info.get("p_value_t")
-            stars  = comp_info.get("stars", "")
-            d      = comp_info.get("cohens_d", 0.0)
-            diff   = comp_info.get("mean_diff", 0.0)
+            p_t = comp_info.get("p_value_t")
+            stars = comp_info.get("stars", "")
+            d = comp_info.get("cohens_d", 0.0)
+            diff = comp_info.get("mean_diff", 0.0)
             if p_t is not None:
                 sig_str = f"Δ={diff:+.3f} d={d:.2f} p={p_t:.4f}{stars}"
             else:
@@ -714,6 +761,7 @@ def print_ablation_summary(
 # Entry point
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="Ablation study for rebuttal")
     parser.add_argument(
@@ -722,25 +770,34 @@ def main():
         help="Path to FSM-SCG requirement_code.jsonl",
     )
     parser.add_argument(
-        "--n_samples", type=int, default=300,
+        "--n_samples",
+        type=int,
+        default=300,
         help="Number of contracts to sample per seed (default: 300)",
     )
     parser.add_argument(
-        "--seeds", nargs="+", type=int, default=[42],
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=[42],
         help="Random seeds for sampling (default: [42]). "
-             "Use '--seeds 42 123 999' for 3-seed reproducibility check.",
+        "Use '--seeds 42 123 999' for 3-seed reproducibility check.",
     )
     parser.add_argument(
-        "--output_dir", default="./results/ablation",
+        "--output_dir",
+        default="./results/ablation",
         help="Directory to write result JSONL files",
     )
     parser.add_argument(
-        "--conditions", nargs="+", default=["A", "B", "C", "D", "E"],
+        "--conditions",
+        nargs="+",
+        default=["A", "B", "C", "D", "E"],
         choices=["A", "B", "C", "D", "E"],
         help="Which conditions to run (default: all five)",
     )
     parser.add_argument(
-        "--model", default="gpt-4o-mini",
+        "--model",
+        default="gpt-4o-mini",
         help="OpenAI model to use",
     )
     args = parser.parse_args()
@@ -768,15 +825,11 @@ def main():
         seed_results: Dict[str, List[Dict]] = {}
 
         for cond_key in args.conditions:
-            cond_results = run_condition(
-                cond_key, records, seed_dir, model=args.model
-            )
+            cond_results = run_condition(cond_key, records, seed_dir, model=args.model)
             seed_results[cond_key] = cond_results
             stats = compute_statistics(cond_results)
             lbl = CONDITION_CONFIGS[cond_key]["label"]
-            print_stats_table(
-                f"{lbl} (seed={seed})" if multi_seed else lbl, stats
-            )
+            print_stats_table(f"{lbl} (seed={seed})" if multi_seed else lbl, stats)
 
         if len(seed_results) > 1:
             print_ablation_summary(seed_results)
@@ -806,32 +859,36 @@ def main():
 
         for cond_key in args.conditions:
             cfg = CONDITION_CONFIGS[cond_key]
-            per_seed_means:    List[float] = []
+            per_seed_means: List[float] = []
             per_seed_compiles: List[float] = []
             for seed, seed_results in all_seed_results.items():
                 if cond_key not in seed_results:
                     continue
-                s  = compute_statistics(seed_results[cond_key])
-                m  = s["composite"]["mean"]
+                s = compute_statistics(seed_results[cond_key])
+                m = s["composite"]["mean"]
                 cr = s.get("compilation_rate")
-                if m  is not None: per_seed_means.append(m)
-                if cr is not None: per_seed_compiles.append(cr)
+                if m is not None:
+                    per_seed_means.append(m)
+                if cr is not None:
+                    per_seed_compiles.append(cr)
 
             if per_seed_means:
                 cross_mean = _stat.mean(per_seed_means)
-                cross_std  = _stat.stdev(per_seed_means) if len(per_seed_means) > 1 else 0.0
-                comp_mean  = _stat.mean(per_seed_compiles) if per_seed_compiles else None
-                comp_str   = f"{comp_mean*100:.1f}%" if comp_mean is not None else "N/A"
+                cross_std = (
+                    _stat.stdev(per_seed_means) if len(per_seed_means) > 1 else 0.0
+                )
+                comp_mean = _stat.mean(per_seed_compiles) if per_seed_compiles else None
+                comp_str = f"{comp_mean*100:.1f}%" if comp_mean is not None else "N/A"
                 print(
                     f"  {cfg['label']:<30}: {cross_mean:.3f} ± {cross_std:.3f}  "
                     f"(compile: {comp_str})"
                 )
                 seed_stability[cond_key] = {
-                    "label":                    cfg["label"],
+                    "label": cfg["label"],
                     "cross_seed_mean_composite": round(cross_mean, 4),
-                    "cross_seed_std_composite":  round(cross_std,  4),
-                    "per_seed_means":            per_seed_means,
-                    "seeds":                     args.seeds,
+                    "cross_seed_std_composite": round(cross_std, 4),
+                    "per_seed_means": per_seed_means,
+                    "seeds": args.seeds,
                 }
 
         with open(output_dir / "seed_stability.json", "w") as f:
@@ -854,9 +911,9 @@ def main():
             sig = compute_pairwise_significance(cond_results, final["C"])
             pairwise[cond_key] = sig
             comp = sig.get("composite", {})
-            p_t  = comp.get("p_value_t")
+            p_t = comp.get("p_value_t")
             diff = comp.get("mean_diff", 0.0)
-            d    = comp.get("cohens_d",  0.0)
+            d = comp.get("cohens_d", 0.0)
             stars = comp.get("stars", "")
             print(
                 f"  {cond_key} vs C: Δ={diff:+.3f}  d={d:.2f}  "
@@ -866,7 +923,9 @@ def main():
 
         with open(output_dir / "pairwise_significance.json", "w") as f:
             json.dump(pairwise, f, indent=2)
-        print(f"[ablation] Pairwise significance → {output_dir / 'pairwise_significance.json'}")
+        print(
+            f"[ablation] Pairwise significance → {output_dir / 'pairwise_significance.json'}"
+        )
 
 
 if __name__ == "__main__":

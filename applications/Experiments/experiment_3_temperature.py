@@ -30,14 +30,14 @@ Usage:
       --output_dir ./results/temperature
 """
 
-import os
-import sys
-import json
-import time
 import argparse
-import tempfile
-import traceback
+import json
+import os
 import statistics
+import sys
+import tempfile
+import time
+import traceback
 from pathlib import Path
 from typing import Dict, List
 
@@ -55,26 +55,28 @@ if _env_file.exists():
             os.environ.setdefault(_k.strip(), _v.strip())
 
 from experiment_utils import (
-    load_dataset,
-    extract_scores,
-    compilation_success,
-    save_results,
     append_result,
+    compilation_success,
     compute_statistics,
+    extract_scores,
+    load_dataset,
     print_stats_table,
+    save_results,
 )
-from applications.solidity_compiler import SolidityCompilationChecker
 
 # We patch agent temperature at runtime (see monkey-patch below)
 from applications import agents as _agents_module
+from applications.solidity_compiler import SolidityCompilationChecker
 from applications.translator import IBMAgenticContractTranslator
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Monkey-patch: override agent temperature at runtime
 # ────────────────────────────────────────────────────────────────────────────
 
-def build_translator_at_temperature(temperature: float, model: str) -> IBMAgenticContractTranslator:
+
+def build_translator_at_temperature(
+    temperature: float, model: str
+) -> IBMAgenticContractTranslator:
     """
     Create a translator whose agents all run at `temperature`.
 
@@ -88,11 +90,11 @@ def build_translator_at_temperature(temperature: float, model: str) -> IBMAgenti
 
     def patched_convert(agentics_llm) -> CrewLLM:
         model_name = getattr(agentics_llm, "model", model)
-        api_key    = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY")
         return CrewLLM(
             model=model_name,
             api_key=api_key,
-            temperature=temperature,     # ← override
+            temperature=temperature,  # ← override
         )
 
     _agents_module._convert_to_crew_llm = patched_convert
@@ -113,6 +115,7 @@ def build_translator_at_temperature(temperature: float, model: str) -> IBMAgenti
 # Per-contract processing
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def process_one(
     translator: IBMAgenticContractTranslator,
     record: Dict,
@@ -126,14 +129,14 @@ def process_one(
         tmp_path = tmp.name
 
     result = {
-        "index":          record["index"],
-        "temperature":    temperature,
-        "solidity":       None,
-        "compilation":    None,
+        "index": record["index"],
+        "temperature": temperature,
+        "solidity": None,
+        "compilation": None,
         "quality_evaluation": None,
         "audit_severity": None,
         "processing_time": None,
-        "error":          None,
+        "error": None,
     }
 
     t0 = time.time()
@@ -146,7 +149,7 @@ def process_one(
             use_agentic_pipeline=True,
         ):
             phase = phase_out.get("phase")
-            data  = phase_out.get("data", {})
+            data = phase_out.get("data", {})
             if phase == 4:
                 result["audit_severity"] = data.get("severity_level")
             elif phase == 7:
@@ -172,6 +175,7 @@ def process_one(
 # Variance analysis across repeated runs at temperature=0.0
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def run_determinism_check(
     records: List[Dict],
     n_repeats: int = 3,
@@ -186,7 +190,7 @@ def run_determinism_check(
     print("  DETERMINISM CHECK  (temperature=0.0, {n_repeats} repeats)")
     print(f"{'='*60}\n")
 
-    sample = records[:20]   # 20 contracts × n_repeats
+    sample = records[:20]  # 20 contracts × n_repeats
     checker = SolidityCompilationChecker()
     all_runs: List[List[Dict]] = []
 
@@ -211,7 +215,9 @@ def run_determinism_check(
 
     if variances:
         mean_var = statistics.mean(variances)
-        print(f"\n  Mean per-contract score variance across {n_repeats} runs: {mean_var:.4f}")
+        print(
+            f"\n  Mean per-contract score variance across {n_repeats} runs: {mean_var:.4f}"
+        )
         print(f"  Mean std deviation : {mean_var**0.5:.4f} points out of 100")
         print(
             "  → Low variance confirms the pipeline produces consistent outputs\n"
@@ -229,7 +235,8 @@ def run_determinism_check(
                 "mean_variance": mean_var if variances else None,
                 "mean_std": mean_var**0.5 if variances else None,
             },
-            f, indent=2,
+            f,
+            indent=2,
         )
     print(f"  Saved → {det_path}")
 
@@ -238,6 +245,7 @@ def run_determinism_check(
 # Summary table
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def print_temperature_table(temp_stats: Dict[float, Dict]) -> None:
     print(f"\n{'='*65}")
     print("  TEMPERATURE SENSITIVITY — REBUTTAL TABLE")
@@ -245,17 +253,21 @@ def print_temperature_table(temp_stats: Dict[float, Dict]) -> None:
     print(f"  {'Temp':>6}  {'Avg Score':>10}  {'Std':>6}  {'Compile%':>9}  {'N':>5}")
     print(f"  {'-'*55}")
     for temp in sorted(temp_stats):
-        s  = temp_stats[temp]
+        s = temp_stats[temp]
         cs = s["composite"]
         cr = s.get("compilation_rate")
         print(
-            f"  {temp:>6.1f}  {cs['mean']:>10.2f}  {cs['std']:>6.2f}  "
-            f"{'N/A':>9}" if cr is None else
-            f"  {temp:>6.1f}  {cs['mean']:>10.2f}  {cs['std']:>6.2f}  "
+            f"  {temp:>6.1f}  {cs['mean']:>10.2f}  {cs['std']:>6.2f}  " f"{'N/A':>9}"
+            if cr is None
+            else f"  {temp:>6.1f}  {cs['mean']:>10.2f}  {cs['std']:>6.2f}  "
             f"{cr*100:>8.1f}%  {cs['n']:>5}"
         )
     print(f"{'='*65}")
-    means  = [temp_stats[t]["composite"]["mean"] for t in temp_stats if temp_stats[t]["composite"]["mean"]]
+    means = [
+        temp_stats[t]["composite"]["mean"]
+        for t in temp_stats
+        if temp_stats[t]["composite"]["mean"]
+    ]
     if means:
         overall_var = statistics.variance(means) if len(means) > 1 else 0
         print(
@@ -268,17 +280,23 @@ def print_temperature_table(temp_stats: Dict[float, Dict]) -> None:
 # Entry point
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="Temperature sensitivity experiment")
-    parser.add_argument("--dataset",     default="requirement_code.jsonl")
-    parser.add_argument("--n_samples",   type=int,   default=100)
-    parser.add_argument("--seed",        type=int,   default=42)
-    parser.add_argument("--temperatures", nargs="+", type=float,
-                        default=[0.0, 0.3, 0.7, 1.0])
-    parser.add_argument("--output_dir",  default="./results/temperature")
-    parser.add_argument("--model",       default="gpt-4o-mini")
-    parser.add_argument("--determinism_repeats", type=int, default=3,
-                        help="Repeats for the temperature=0.0 determinism check")
+    parser.add_argument("--dataset", default="requirement_code.jsonl")
+    parser.add_argument("--n_samples", type=int, default=100)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--temperatures", nargs="+", type=float, default=[0.0, 0.3, 0.7, 1.0]
+    )
+    parser.add_argument("--output_dir", default="./results/temperature")
+    parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument(
+        "--determinism_repeats",
+        type=int,
+        default=3,
+        help="Repeats for the temperature=0.0 determinism check",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -297,15 +315,17 @@ def main():
         t_path = output_dir / f"temperature_{temp}.jsonl"
         t_path.parent.mkdir(parents=True, exist_ok=True)
         open(t_path, "w").close()  # truncate for a fresh run
-        results    = []
+        results = []
 
         for i, record in enumerate(records):
-            print(f"  [{i+1}/{len(records)}] idx={record['index']}", end=" ", flush=True)
+            print(
+                f"  [{i+1}/{len(records)}] idx={record['index']}", end=" ", flush=True
+            )
             r = process_one(translator, record, temp, checker)
             results.append(r)
             append_result(r, t_path)
             scores = extract_scores(r.get("quality_evaluation"))
-            comp   = compilation_success(r.get("compilation"))
+            comp = compilation_success(r.get("compilation"))
             print(
                 f"  score={scores['composite']:.1f}  "
                 f"compile={'Y' if comp else ('N' if comp is False else '?')}  "

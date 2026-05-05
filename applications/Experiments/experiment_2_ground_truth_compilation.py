@@ -31,15 +31,15 @@ Usage:
       --output_dir ./results/gt_compilation
 """
 
+import argparse
+import json
 import os
 import re
 import sys
-import json
 import time
-import argparse
 import traceback
-from pathlib import Path
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,17 +55,16 @@ if _env_file.exists():
             _k, _, _v = _line.partition("=")
             os.environ.setdefault(_k.strip(), _v.strip())
 
-from experiment_utils import load_dataset, save_results, append_result
-from applications.solidity_compiler import SolidityCompilationChecker
+from experiment_utils import append_result, load_dataset, save_results
 
+from applications.solidity_compiler import SolidityCompilationChecker
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pragma / version extraction
 # ────────────────────────────────────────────────────────────────────────────
 
-VERSION_RE = re.compile(
-    r"pragma\s+solidity\s+([^;]+);", re.IGNORECASE
-)
+VERSION_RE = re.compile(r"pragma\s+solidity\s+([^;]+);", re.IGNORECASE)
+
 
 def extract_pragma_version(code: str) -> Optional[str]:
     """Return the raw pragma string, e.g. '^0.4.24' or '>=0.5.0 <0.7.0'."""
@@ -88,16 +87,17 @@ def bucket_version(pragma: Optional[str]) -> str:
 # ────────────────────────────────────────────────────────────────────────────
 
 ERROR_PATTERNS: List[Tuple[str, str]] = [
-    ("DeclarationError",         "declaration_error"),
-    ("TypeError",                "type_error"),
-    ("SyntaxError",              "syntax_error"),
-    ("ParserError",              "parser_error"),
-    ("UnimplementedFeatureError","unimplemented_feature"),
-    ("visibility",               "missing_visibility"),       # old-style no visibility
-    ("SafeMath",                 "safemath_dependency"),
-    ("not found",                "import_not_found"),
-    ("timed out",                "timeout"),
+    ("DeclarationError", "declaration_error"),
+    ("TypeError", "type_error"),
+    ("SyntaxError", "syntax_error"),
+    ("ParserError", "parser_error"),
+    ("UnimplementedFeatureError", "unimplemented_feature"),
+    ("visibility", "missing_visibility"),  # old-style no visibility
+    ("SafeMath", "safemath_dependency"),
+    ("not found", "import_not_found"),
+    ("timed out", "timeout"),
 ]
+
 
 def categorise_error(error_message: str) -> str:
     if not error_message:
@@ -112,6 +112,7 @@ def categorise_error(error_message: str) -> str:
 # Per-contract analysis
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def analyse_one_contract(
     record: Dict,
     checker: SolidityCompilationChecker,
@@ -124,36 +125,38 @@ def analyse_one_contract(
     code = record["code"]
 
     result = {
-        "index":           record["index"],
-        "pragma":          None,
-        "version_bucket":  None,
-        "compiler_used":   None,
-        "compiles":        None,
-        "error_message":   None,
-        "error_category":  None,
-        "warnings":        [],
-        "lines_of_code":   len(code.splitlines()),
+        "index": record["index"],
+        "pragma": None,
+        "version_bucket": None,
+        "compiler_used": None,
+        "compiles": None,
+        "error_message": None,
+        "error_category": None,
+        "warnings": [],
+        "lines_of_code": len(code.splitlines()),
     }
 
     try:
         comp = checker.check_compilation(code)
-        result["compiles"]        = comp.get("compiles")
-        result["error_message"]   = comp.get("error_message")
-        result["warnings"]        = comp.get("warnings", [])
+        result["compiles"] = comp.get("compiles")
+        result["error_message"] = comp.get("error_message")
+        result["warnings"] = comp.get("warnings", [])
         # Use pragma/version info returned by the checker (avoids duplication)
-        result["pragma"]          = comp.get("pragma_version") or extract_pragma_version(code)
-        result["version_bucket"]  = comp.get("version_bucket") or bucket_version(result["pragma"])
-        result["compiler_used"]   = comp.get("compiler_version", "unknown")
+        result["pragma"] = comp.get("pragma_version") or extract_pragma_version(code)
+        result["version_bucket"] = comp.get("version_bucket") or bucket_version(
+            result["pragma"]
+        )
+        result["compiler_used"] = comp.get("compiler_version", "unknown")
         if comp.get("error_message"):
             result["error_category"] = categorise_error(comp["error_message"])
     except Exception as exc:
         # Fall back to regex extraction so version-bucket stats don't break
         pragma = extract_pragma_version(code)
-        result["pragma"]          = pragma
-        result["version_bucket"]  = bucket_version(pragma)
-        result["compiles"]        = False
-        result["error_message"]   = str(exc)
-        result["error_category"]  = "exception"
+        result["pragma"] = pragma
+        result["version_bucket"] = bucket_version(pragma)
+        result["compiles"] = False
+        result["error_message"] = str(exc)
+        result["error_category"] = "exception"
 
     return result
 
@@ -162,10 +165,11 @@ def analyse_one_contract(
 # Reporting
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def print_report(results: List[Dict]) -> None:
-    total   = len(results)
+    total = len(results)
     success = sum(1 for r in results if r["compiles"] is True)
-    failed  = sum(1 for r in results if r["compiles"] is False)
+    failed = sum(1 for r in results if r["compiles"] is False)
     unknown = total - success - failed
 
     print(f"\n{'='*65}")
@@ -178,7 +182,7 @@ def print_report(results: List[Dict]) -> None:
 
     # ── Version bucket breakdown ────────────────────────────────────────────
     print(f"\n  Compilation rate by Solidity version:")
-    bucket_ok  = defaultdict(int)
+    bucket_ok = defaultdict(int)
     bucket_tot = defaultdict(int)
     for r in results:
         b = r["version_bucket"]
@@ -187,7 +191,7 @@ def print_report(results: List[Dict]) -> None:
             bucket_ok[b] += 1
 
     for bucket in sorted(bucket_tot):
-        ok  = bucket_ok[bucket]
+        ok = bucket_ok[bucket]
         tot = bucket_tot[bucket]
         pct = ok / tot * 100 if tot else 0
         bar = "█" * int(pct / 5)
@@ -205,17 +209,29 @@ def print_report(results: List[Dict]) -> None:
     print(f"\n  KEY FINDING FOR REBUTTAL:")
     print(f"  Ground-truth compilation rate : {success/total*100:.1f}%")
     print(f"  Generated compilation rate    : 86.54%  (reported in paper)")
-    print(f"  (Compiler: py-solc-x — each contract compiled with its own pragma version)")
-    delta = success/total*100 - 86.54
+    print(
+        f"  (Compiler: py-solc-x — each contract compiled with its own pragma version)"
+    )
+    delta = success / total * 100 - 86.54
     if delta < 0:
-        print(f"  → Ground truth compiles {abs(delta):.1f}% LESS reliably than generated code.")
-        print(f"    Since we compile with version-correct solc, this reflects genuine code")
-        print(f"    quality issues (e.g., external SafeMath imports, prototype-era syntax)")
+        print(
+            f"  → Ground truth compiles {abs(delta):.1f}% LESS reliably than generated code."
+        )
+        print(
+            f"    Since we compile with version-correct solc, this reflects genuine code"
+        )
+        print(
+            f"    quality issues (e.g., external SafeMath imports, prototype-era syntax)"
+        )
         print(f"    rather than a compiler-version measurement artefact.")
-        print(f"    This is a conservative bound — the score gap is partially explained")
+        print(
+            f"    This is a conservative bound — the score gap is partially explained"
+        )
         print(f"    by these unresolvable GT contract failures.")
     elif delta > 0:
-        print(f"  → Ground truth compiles {delta:.1f}% MORE reliably than generated code.")
+        print(
+            f"  → Ground truth compiles {delta:.1f}% MORE reliably than generated code."
+        )
         print(f"    Generated code compilation rate is the binding constraint,")
         print(f"    confirming the paper's 86.54% figure is not inflated.")
     else:
@@ -229,14 +245,16 @@ def print_report(results: List[Dict]) -> None:
 # Entry point
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Analyse ground-truth contract compilation rates"
     )
-    parser.add_argument("--dataset",    default="requirement_code.jsonl")
-    parser.add_argument("--n_samples",  type=int, default=-1,
-                        help="-1 = process entire dataset")
-    parser.add_argument("--seed",       type=int, default=42)
+    parser.add_argument("--dataset", default="requirement_code.jsonl")
+    parser.add_argument(
+        "--n_samples", type=int, default=-1, help="-1 = process entire dataset"
+    )
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", default="./results/gt_compilation")
     args = parser.parse_args()
 
@@ -261,9 +279,7 @@ def main():
     t0 = time.time()
 
     for i, record in enumerate(records):
-        print(
-            f"  [{i+1}/{len(records)}] idx={record['index']}", end=" ", flush=True
-        )
+        print(f"  [{i+1}/{len(records)}] idx={record['index']}", end=" ", flush=True)
         r = analyse_one_contract(record, checker)
         results.append(r)
         append_result(r, out_path)
@@ -280,7 +296,7 @@ def main():
     save_results(results, str(out_path))
 
     # Save summary JSON
-    total   = len(results)
+    total = len(results)
     success = sum(1 for r in results if r["compiles"] is True)
 
     bucket_stats: Dict = defaultdict(lambda: {"ok": 0, "total": 0})
@@ -295,17 +311,17 @@ def main():
     )
 
     summary = {
-        "total":               total,
-        "successful":          success,
-        "failed":              total - success,
+        "total": total,
+        "successful": success,
+        "failed": total - success,
         "overall_success_rate": round(success / total, 4) if total else 0,
         "generated_success_rate_paper": 0.8654,
-        "delta_vs_generated":  round(success / total - 0.8654, 4) if total else None,
-        "by_version_bucket":   {
+        "delta_vs_generated": round(success / total - 0.8654, 4) if total else None,
+        "by_version_bucket": {
             b: {
-                "ok":    v["ok"],
+                "ok": v["ok"],
                 "total": v["total"],
-                "rate":  round(v["ok"] / v["total"], 4) if v["total"] else 0,
+                "rate": round(v["ok"] / v["total"], 4) if v["total"] else 0,
             }
             for b, v in bucket_stats.items()
         },

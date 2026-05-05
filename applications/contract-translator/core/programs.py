@@ -14,16 +14,19 @@ Program classes:
 
 import json
 from typing import Dict, List
+
 from .schemas import UniversalContractSchema
 
 # agentics.LLM / Program / message helpers were removed in agentics >=2.
 # Provide minimal stubs so the module imports cleanly; the legacy forward()
 # methods will raise NotImplementedError if actually called.
 try:
-    from agentics import LLM, Program, user_message, system_message  # type: ignore
+    from agentics import LLM, Program, system_message, user_message  # type: ignore
 except ImportError:
+
     class LLM:  # type: ignore
-        def __init__(self, model: str = "gpt-4o-mini", **kw): self.model = model
+        def __init__(self, model: str = "gpt-4o-mini", **kw):
+            self.model = model
 
     class Program:  # type: ignore
         def forward(self, *a, **kw):
@@ -32,23 +35,28 @@ except ImportError:
                 "Use the CrewAI agent pipeline instead."
             )
 
-    def user_message(content: str, **kw) -> dict:    # type: ignore
-        return {"role": "user",   "content": content}
+    def user_message(content: str, **kw) -> dict:  # type: ignore
+        return {"role": "user", "content": content}
 
     def system_message(content: str, **kw) -> dict:  # type: ignore
         return {"role": "system", "content": content}
-from .task_builders import (
-    create_solidity_generation_prompt,
-    create_audit_task_description,
-    create_abi_generator_task_description,
-)
 
+
+# Import all Program classes from the original file temporarily
+import sys
+from pathlib import Path
+
+from .task_builders import (
+    create_abi_generator_task_description,
+    create_audit_task_description,
+    create_solidity_generation_prompt,
+)
 
 # Note: This file is auto-generated from agentic_implementation.py refactoring
 # All Program classes are extracted here for modularity
 # See original file for full implementation - classes start at:
 # - UniversalContractParserProgram: line 117
-# - UniversalSolidityGeneratorProgram: line 349  
+# - UniversalSolidityGeneratorProgram: line 349
 # - SecurityAuditorProgram: line 1014
 # - ABIGeneratorProgram: line 1053
 # - MCPServerGeneratorProgram: line 1083
@@ -56,9 +64,6 @@ from .task_builders import (
 # Due to size (900+ lines), I'm importing them from the original file
 # This maintains backward compatibility while the refactoring is in progress
 
-# Import all Program classes from the original file temporarily
-import sys
-from pathlib import Path
 
 # Add parent directory to import from original file
 parent_dir = str(Path(__file__).parent.parent)
@@ -67,18 +72,20 @@ if parent_dir not in sys.path:
 
 # ==================== PROGRAM CLASS 1: UniversalContractParserProgram ====================
 
+
 class UniversalContractParserProgram(Program):
     """
     Legacy Program class - kept for compatibility.
     Use create_parser_instructions() for Agent-based approach.
     """
+
     def forward(self, contract_text: str, lm: LLM) -> UniversalContractSchema:
         """Parse any contract type"""
-        
+
         messages = [
             system_message(
                 """You are an expert contract analyst who extracts EXACT, SPECIFIC information from contracts.
-                
+
                 CRITICAL INSTRUCTIONS:
                 1. Extract the EXACT function names mentioned in the contract (e.g., "initializeLease", "payRent", "confirmDelivery")
                 2. Extract the EXACT variable names mentioned (e.g., "monthlyRent", "securityDeposit", "deliveryDate")
@@ -86,7 +93,7 @@ class UniversalContractParserProgram(Program):
                 4. Extract the EXACT party roles as described in the contract
                 5. DO NOT use generic placeholders - use the specific terminology from the contract
                 6. Capture ALL conditions, transitions, and logic flows mentioned
-                
+
                 Your goal: Create a structured representation that preserves ALL specific details from the contract text."""
             ),
             user_message(
@@ -175,17 +182,17 @@ Example: if contract mentions 'transferring tokens' and 'approving spenders', ex
 
 EXTRACT EVERYTHING SPECIFIC - DO NOT USE GENERIC NAMES OR PLACEHOLDERS.
 OBLIGATIONS MUST NOT BE EMPTY if any functions or operations are described."""
-            )
+            ),
         ]
-        
+
         response = lm.chat(messages=messages)
         response_text = str(response).strip()
 
         if "```json" in response_text:
             response_text = response_text.split("```json")[1].split("```")[0].strip()
-        
+
         parsed = json.loads(response_text)
-        
+
         # ===== VALIDATION & CLEANUP =====
         # Ensure financial_terms have required fields
         if "financial_terms" in parsed and parsed["financial_terms"]:
@@ -207,7 +214,7 @@ OBLIGATIONS MUST NOT BE EMPTY if any functions or operations are described."""
                     term["purpose"] = "Contract payment"
                 cleaned_terms.append(term)
             parsed["financial_terms"] = cleaned_terms
-        
+
         # Ensure parties have required fields
         if "parties" in parsed and parsed["parties"]:
             cleaned_parties = []
@@ -217,29 +224,30 @@ OBLIGATIONS MUST NOT BE EMPTY if any functions or operations are described."""
                         party["role"] = "other"
                     cleaned_parties.append(party)
             parsed["parties"] = cleaned_parties
-        
+
         # Ensure at least one party
         if not parsed.get("parties"):
             parsed["parties"] = [{"name": "Unknown Party", "role": "other"}]
-        
+
         # Ensure contract_type is set
         if not parsed.get("contract_type"):
             parsed["contract_type"] = "other"
-        
+
         return UniversalContractSchema(**parsed)
 
 
 # ==================== PROGRAM CLASS 2: UniversalSolidityGeneratorProgram ====================
 
+
 class UniversalSolidityGeneratorProgram(Program):
     """Generates Solidity for ANY contract type"""
-    
+
     def forward(self, schema: UniversalContractSchema, lm: LLM) -> str:
         """Generate contract-type-specific Solidity using task_builders prompt"""
-        
+
         # Use the comprehensive prompt from task_builders.py
         prompt = create_solidity_generation_prompt(schema)
-        
+
         messages = [
             system_message(
                 """You are an expert Solidity engineer. Your sole job is to implement the contract specification given to you.
@@ -259,18 +267,20 @@ CRITICAL RULES (violating any of these means you have failed):
 
 Read every line of the specification prompt. The MANDATORY sections are mandatory. Do not skip any."""
             ),
-            user_message(prompt)
+            user_message(prompt),
         ]
-        
+
         response = lm.chat(messages=messages)
         solidity_code = str(response).strip()
-        
+
         # Remove markdown code fences if present
         if "```solidity" in solidity_code:
-            solidity_code = solidity_code.split("```solidity")[1].split("```")[0].strip()
+            solidity_code = (
+                solidity_code.split("```solidity")[1].split("```")[0].strip()
+            )
         elif "```" in solidity_code:
             solidity_code = solidity_code.split("```")[1].split("```")[0].strip()
-        
+
         # Validate code quality
         quality_issues = self._validate_code_quality(solidity_code, schema)
         if quality_issues:
@@ -278,64 +288,80 @@ Read every line of the specification prompt. The MANDATORY sections are mandator
             for issue in quality_issues:
                 print(f"   - {issue}")
             print(f"\n   These issues should be addressed in future iterations.")
-        
+
         return solidity_code
-    
-    def _validate_code_quality(self, solidity_code: str, schema: UniversalContractSchema) -> List[str]:
+
+    def _validate_code_quality(
+        self, solidity_code: str, schema: UniversalContractSchema
+    ) -> List[str]:
         """Validate generated code for common quality issues"""
         issues = []
-        
+
         # Check for placeholder comments
-        if "// logic goes here" in solidity_code.lower() or "// todo" in solidity_code.lower():
+        if (
+            "// logic goes here" in solidity_code.lower()
+            or "// todo" in solidity_code.lower()
+        ):
             issues.append("Contains placeholder comments - logic not fully implemented")
-        
+
         # Check for silent failure pattern
         if "if (" in solidity_code and "return;" in solidity_code:
-            lines = solidity_code.split('\n')
+            lines = solidity_code.split("\n")
             for i, line in enumerate(lines):
                 if "if (" in line and i + 1 < len(lines) and "return;" in lines[i + 1]:
-                    issues.append(f"Silent failure detected (if/return pattern) - should use require()")
-        
+                    issues.append(
+                        f"Silent failure detected (if/return pattern) - should use require()"
+                    )
+
         # Check if declared variables are used
         conditions = schema.conditions if schema.conditions else {}
-        variable_names = conditions.get('variable_names', [])
+        variable_names = conditions.get("variable_names", [])
         for var_name in variable_names[:5]:  # Check first 5 variables
             if var_name and var_name not in solidity_code:
-                issues.append(f"Variable '{var_name}' from contract not found in generated code")
-        
+                issues.append(
+                    f"Variable '{var_name}' from contract not found in generated code"
+                )
+
         # Check if function names are used
-        function_names = conditions.get('function_names', [])
+        function_names = conditions.get("function_names", [])
         for func_name in function_names[:5]:  # Check first 5 functions
             if func_name and f"function {func_name}" not in solidity_code:
                 issues.append(f"Function '{func_name}' from contract not implemented")
-        
+
         # Check for empty function bodies
         if "function " in solidity_code and "{ }" in solidity_code:
             issues.append("Contains empty function bodies")
-        
+
         # Check for access control
         if "onlyOwner" not in solidity_code and "owner" in solidity_code.lower():
             issues.append("Owner declared but no access control modifier used")
-        
+
         # Check for time-based variables that aren't checked
-        if "deadline" in solidity_code.lower() and "block.timestamp" not in solidity_code:
-            issues.append("Time variable declared but never checked against block.timestamp")
-        
+        if (
+            "deadline" in solidity_code.lower()
+            and "block.timestamp" not in solidity_code
+        ):
+            issues.append(
+                "Time variable declared but never checked against block.timestamp"
+            )
+
         return issues
-    
-    def regenerate_with_error_feedback(self, schema: UniversalContractSchema, error_message: str, lm: LLM) -> str:
+
+    def regenerate_with_error_feedback(
+        self, schema: UniversalContractSchema, error_message: str, lm: LLM
+    ) -> str:
         """Regenerate contract with compilation error feedback"""
-        
+
         print(f"\n🔧 REGENERATING CONTRACT WITH ERROR FEEDBACK")
         print(f"   Error reported: {error_message[:100]}...")
-        
+
         # Extract specific names from schema
         conditions = schema.conditions if schema.conditions else {}
-        function_names = conditions.get('function_names', [])
-        variable_names = conditions.get('variable_names', [])
-        state_names = conditions.get('state_names', [])
-        events = conditions.get('events', [])
-        
+        function_names = conditions.get("function_names", [])
+        variable_names = conditions.get("variable_names", [])
+        state_names = conditions.get("state_names", [])
+        events = conditions.get("events", [])
+
         messages = [
             system_message(
                 f"""You are a Solidity expert debugging and regenerating smart contracts.
@@ -377,31 +403,33 @@ REQUIREMENTS:
 7. Implement all obligations as functions
 
 Return ONLY valid, compilable Solidity code with EXACT names preserved."""
-            )
+            ),
         ]
-        
+
         print(f"   Requesting LLM to regenerate with error feedback...")
         response = lm.chat(messages=messages)
         solidity_code = str(response).strip()
-        
+
         # Remove markdown code fences if present
         if "```solidity" in solidity_code:
-            solidity_code = solidity_code.split("```solidity")[1].split("```")[0].strip()
+            solidity_code = (
+                solidity_code.split("```solidity")[1].split("```")[0].strip()
+            )
         elif "```" in solidity_code:
             solidity_code = solidity_code.split("```")[1].split("```")[0].strip()
-        
+
         print(f"   ✓ Regenerated contract ({len(solidity_code.splitlines())} lines)")
         return solidity_code
-    
+
     def _get_requirements_for_type(self, contract_type: str) -> str:
         """Get contract-type-specific requirements"""
-        
+
         requirements_map = {
-            'non_disclosure_agreement': """
+            "non_disclosure_agreement": """
 REQUIRED FUNCTIONS FOR NDA:
 VIEW FUNCTIONS (getters - must handle missing data gracefully):
 - getPartyA() returns address
-- getPartyB() returns address  
+- getPartyB() returns address
 - getConfidentialityPeriodDays() returns uint
 - getBreachPenaltyAmount() returns uint
 - isConfidentialityActive() returns bool
@@ -421,8 +449,7 @@ STATE VARIABLES TO STORE:
 - isActive (bool)
 
 IMPORTANT: All functions must be defensive - return safely even if data missing.""",
-            
-            'rental_agreement': """
+            "rental_agreement": """
 REQUIRED FUNCTIONS FOR RENTAL:
 VIEW FUNCTIONS:
 - getLandlord() returns address
@@ -449,8 +476,7 @@ STATE VARIABLES TO STORE:
 - isActive (bool)
 
 IMPORTANT: All getters return safely with defaults (0, address(0)) if data missing.""",
-            
-            'employment_contract': """
+            "employment_contract": """
 REQUIRED FUNCTIONS FOR EMPLOYMENT:
 VIEW FUNCTIONS:
 - getEmployee() returns address
@@ -476,8 +502,7 @@ STATE VARIABLES TO STORE:
 - totalSalaryPaid, isEmployed (tracking)
 
 IMPORTANT: Handle missing salary/bonus gracefully - return 0, don't fail.""",
-            
-            'sales_agreement': """
+            "sales_agreement": """
 REQUIRED FUNCTIONS FOR SALES:
 VIEW FUNCTIONS:
 - getSeller() returns address
@@ -504,8 +529,7 @@ STATE VARIABLES TO STORE:
 - deliveryConfirmed, inspectionPassed (bools)
 
 IMPORTANT: Handle missing descriptions and prices gracefully.""",
-            
-            'service_agreement': """
+            "service_agreement": """
 REQUIRED FUNCTIONS FOR SERVICE:
 VIEW FUNCTIONS:
 - getServiceProvider() returns address
@@ -534,8 +558,7 @@ STATE VARIABLES TO STORE:
 - isActive (bool)
 
 IMPORTANT: All functions safe with missing milestone/fee data.""",
-            
-            'loan_agreement': """
+            "loan_agreement": """
 REQUIRED FUNCTIONS FOR LOAN:
 VIEW FUNCTIONS:
 - getLender() returns address
@@ -564,8 +587,7 @@ STATE VARIABLES TO STORE:
 - totalAmountRepaid, isActive, inDefault (tracking)
 
 IMPORTANT: Interest calculations return 0 if rate not specified.""",
-            
-            'investment_agreement': """
+            "investment_agreement": """
 REQUIRED FUNCTIONS FOR INVESTMENT:
 VIEW FUNCTIONS:
 - getInvestor() returns address
@@ -596,8 +618,10 @@ STATE VARIABLES TO STORE:
 
 IMPORTANT: All functions safe with missing valuation/dividend data.""",
         }
-        
-        return requirements_map.get(contract_type, """
+
+        return requirements_map.get(
+            contract_type,
+            """
 REQUIRED FOR ALL CONTRACTS:
 VIEW FUNCTIONS:
 - Create getters for all mentioned parties, amounts, and dates
@@ -619,17 +643,19 @@ DEFENSIVE PROGRAMMING RULES:
 - EVERY function must handle missing data gracefully
 - Return sensible defaults, never revert on missing fields
 - Check if amounts > 0 before operations
-- Never require() to fail due to missing optional terms""")
+- Never require() to fail due to missing optional terms""",
+        )
 
 
 # ==================== PROGRAM CLASS 3: SecurityAuditorProgram ====================
 
+
 class SecurityAuditorProgram(Program):
     """IBM Agentics Program for security auditing"""
-    
+
     def forward(self, solidity_code: str, lm: LLM) -> Dict:
         """Perform security audit"""
-        
+
         messages = [
             system_message(
                 """You are a blockchain security expert specializing in Solidity smart contract auditing.
@@ -643,27 +669,28 @@ CRITICAL RULES:
 - vulnerability_count must equal the exact number of items in the issues array
 - recommendations must be specific line-level fixes, not generic advice"""
             ),
-            user_message(create_audit_task_description(solidity_code))
+            user_message(create_audit_task_description(solidity_code)),
         ]
-        
+
         response = lm.chat(messages=messages)
         audit_text = str(response).strip()
-        
+
         if "```json" in audit_text:
             audit_text = audit_text.split("```json")[1].split("```")[0].strip()
         elif "```" in audit_text:
             audit_text = audit_text.split("```")[1].split("```")[0].strip()
-        
+
         return json.loads(audit_text)
 
 
 # ==================== PROGRAM CLASS 4: ABIGeneratorProgram ====================
 
+
 class ABIGeneratorProgram(Program):
-    
+
     def forward(self, solidity_code: str, lm: LLM) -> List[Dict]:
         """Generate ABI"""
-        
+
         messages = [
             system_message(
                 """You are an Ethereum ABI expert generating complete, accurate ABI JSON from Solidity contracts.
@@ -676,75 +703,90 @@ CRITICAL RULES:
 - Indexed event parameters must have "indexed": true
 - Preserve all parameter names exactly as in the source code"""
             ),
-            user_message(create_abi_generator_task_description(solidity_code))
+            user_message(create_abi_generator_task_description(solidity_code)),
         ]
-        
+
         response = lm.chat(messages=messages)
         abi_text = str(response).strip()
-        
+
         if "```json" in abi_text:
             abi_text = abi_text.split("```json")[1].split("```")[0].strip()
         elif "```" in abi_text:
             abi_text = abi_text.split("```")[1].split("```")[0].strip()
-        
+
         return json.loads(abi_text)
 
 
 # ==================== PROGRAM CLASS 5: MCPServerGeneratorProgram ====================
 
+
 class MCPServerGeneratorProgram(Program):
     """
     IBM Agentics Program for generating custom MCP servers from ABI files
     """
-    
-    def forward(self, abi: List[Dict], schema: UniversalContractSchema, contract_name: str, lm: LLM) -> str:
+
+    def forward(
+        self,
+        abi: List[Dict],
+        schema: UniversalContractSchema,
+        contract_name: str,
+        lm: LLM,
+    ) -> str:
         """
         Generate custom MCP server code from ABI
-        
+
         Args:
             abi: The contract ABI
             schema: The contract schema (for context)
             contract_name: Name of the contract file
             lm: Language model
-            
+
         Returns:
             str: Complete Python code for MCP server
         """
-        
+
         # Extract function information from ABI
-        functions = [item for item in abi if item.get('type') == 'function']
-        payable_functions = [f for f in functions if f.get('stateMutability') == 'payable']
-        nonpayable_functions = [f for f in functions if f.get('stateMutability') == 'nonpayable']
-        view_functions = [f for f in functions if f.get('stateMutability') in ['view', 'pure']]
-        
+        functions = [item for item in abi if item.get("type") == "function"]
+        payable_functions = [
+            f for f in functions if f.get("stateMutability") == "payable"
+        ]
+        nonpayable_functions = [
+            f for f in functions if f.get("stateMutability") == "nonpayable"
+        ]
+        view_functions = [
+            f for f in functions if f.get("stateMutability") in ["view", "pure"]
+        ]
+
         # Get constructor for understanding contract initialization
-        constructor = next((item for item in abi if item.get('type') == 'constructor'), None)
-        
+        constructor = next(
+            (item for item in abi if item.get("type") == "constructor"), None
+        )
+
         # Create detailed function descriptions
         function_details = self._create_function_descriptions(functions, schema)
-        
+
         messages = [
             system_message(
                 """You are an expert Python developer specializing in blockchain integration and MCP servers.
-                
+
                 You understand:
                 - Web3.py for Ethereum interaction
                 - FastMCP (v0.7+) for creating MCP tool servers using FastMCP class
                 - Smart contract function calling patterns
                 - Transaction signing and gas management
                 - Error handling for blockchain operations
-                
+
                 CRITICAL: Use FastMCP (not the old MCP class). The correct import is:
                   from fastmcp import FastMCP
                   mcp = FastMCP("ContractName")
                   @mcp.tool()
                   def function_name():
                       ...
-                
+
                 The main block must end with:
                   if __name__ == "__main__":
                       mcp.run()
-                
+
                 You write clean, well-documented, production-ready code."""
             ),
             user_message(
@@ -783,20 +825,20 @@ Generate a Python MCP server file with CORRECT FastMCP API:
    import json
    from pathlib import Path
    from dotenv import load_dotenv
-   
+
    # Load .env from the same directory as this script
    env_path = Path(__file__).parent / '.env'
    load_dotenv(dotenv_path=env_path)
-   
+
    # Load ABI from the same directory as this script
    abi_path = Path(__file__).parent / '{contract_name}.abi.json'
    with open(abi_path, 'r') as f:
        contract_abi = json.load(f)
-   
+
    RPC_URL = os.getenv('RPC_URL')
    PRIVATE_KEY = os.getenv('PRIVATE_KEY')
    CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
-   
+
    web3 = Web3(Web3.HTTPProvider(RPC_URL))
    account = web3.eth.account.from_key(PRIVATE_KEY)
    contract = web3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=contract_abi)
@@ -808,21 +850,21 @@ Generate a Python MCP server file with CORRECT FastMCP API:
    ```
 
 4. **Create @mcp.tool() decorated functions for EACH ABI function**:
-   
+
    For PAYABLE functions:
    - Build transaction with correct value
    - Sign and send transaction
    - Return {{"tx_hash": hash}}
-   
+
    For NON-PAYABLE functions:
    - Build transaction (no value)
    - Sign and send transaction
    - Return {{"tx_hash": hash}}
-   
+
    For VIEW functions:
    - Call function (read-only)
    - Return result directly
-   
+
 5. **Documentation**:
    - Each @mcp.tool() function must have docstring
    - Explain what it does, who can call it, parameters, return value
@@ -899,46 +941,60 @@ IMPORTANT RULES:
 - File must be self-contained and runnable
 
 Return ONLY the complete Python code, no explanations."""
-            )
+            ),
         ]
-        
+
         response = lm.chat(messages=messages)
         server_code = str(response).strip()
-        
+
         # Clean markdown
         if "```python" in server_code:
             server_code = server_code.split("```python")[1].split("```")[0].strip()
         elif "```" in server_code:
             server_code = server_code.split("```")[1].split("```")[0].strip()
-        
+
         return server_code
-    
-    def _create_function_descriptions(self, functions: List[Dict], schema: UniversalContractSchema) -> str:
+
+    def _create_function_descriptions(
+        self, functions: List[Dict], schema: UniversalContractSchema
+    ) -> str:
         """Create human-readable descriptions of functions based on contract context"""
-        
+
         descriptions = []
-        
+
         for func in functions:
-            name = func.get('name', 'unknown')
-            inputs = func.get('inputs', [])
-            outputs = func.get('outputs', [])
-            stateMutability = func.get('stateMutability', 'nonpayable')
-            
+            name = func.get("name", "unknown")
+            inputs = func.get("inputs", [])
+            outputs = func.get("outputs", [])
+            stateMutability = func.get("stateMutability", "nonpayable")
+
             # Create parameter description
-            params = ', '.join([f"{inp.get('name', 'param')}:{inp.get('type', 'unknown')}" for inp in inputs])
-            returns = ', '.join([f"{out.get('name', 'result')}:{out.get('type', 'unknown')}" for out in outputs]) if outputs else 'void'
-            
-            descriptions.append(
-                f"  - {name}({params}) → {returns} [{stateMutability}]"
+            params = ", ".join(
+                [
+                    f"{inp.get('name', 'param')}:{inp.get('type', 'unknown')}"
+                    for inp in inputs
+                ]
             )
-        
-        return '\n'.join(descriptions)
+            returns = (
+                ", ".join(
+                    [
+                        f"{out.get('name', 'result')}:{out.get('type', 'unknown')}"
+                        for out in outputs
+                    ]
+                )
+                if outputs
+                else "void"
+            )
+
+            descriptions.append(f"  - {name}({params}) → {returns} [{stateMutability}]")
+
+        return "\n".join(descriptions)
 
 
 __all__ = [
-    'UniversalContractParserProgram',
-    'UniversalSolidityGeneratorProgram',
-    'SecurityAuditorProgram',
-    'ABIGeneratorProgram',
-    'MCPServerGeneratorProgram',
+    "UniversalContractParserProgram",
+    "UniversalSolidityGeneratorProgram",
+    "SecurityAuditorProgram",
+    "ABIGeneratorProgram",
+    "MCPServerGeneratorProgram",
 ]

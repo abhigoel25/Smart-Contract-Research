@@ -9,36 +9,36 @@ Environment Variables:
 """
 
 import os
-import sys
 import subprocess
+import sys
+import threading
 import time
 import webbrowser
-import threading
-from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
 
 # Get the workspace root (parent of where this script is)
 workspace_root = Path(__file__).parent.absolute()
 
 # Check which implementation to use
-use_modular = os.getenv('USE_MODULAR_CORE', 'true').lower() not in ('false', '0', 'no')
+use_modular = os.getenv("USE_MODULAR_CORE", "true").lower() not in ("false", "0", "no")
 impl_mode = "Modular Core Package" if use_modular else "Legacy Monolithic"
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("IBM Agentics - Smart Contract Translator (Research Edition)")
 print("   Dataset-Driven Quality Evaluation")
 print(f"   Implementation: {impl_mode}")
-print("="*70 + "\n")
+print("=" * 70 + "\n")
 
 # Ensure required packages are installed
 print("Checking dependencies...")
 required_packages = {
-    'flask': 'flask',
-    'flask_cors': 'flask-cors',
-    'fastmcp': 'fastmcp',
-    'agentics': 'agentics',
-    'PyPDF2': 'PyPDF2',
-    'pydantic': 'pydantic'
+    "flask": "flask",
+    "flask_cors": "flask-cors",
+    "fastmcp": "fastmcp",
+    "agentics": "agentics",
+    "PyPDF2": "PyPDF2",
+    "pydantic": "pydantic",
 }
 
 for import_name, pip_name in required_packages.items():
@@ -47,7 +47,7 @@ for import_name, pip_name in required_packages.items():
         print(f"   {pip_name}")
     except ImportError:
         print(f"   Installing {pip_name}...")
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', pip_name, '-q'])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name, "-q"])
         print(f"   {pip_name} installed")
 
 print("\nAll dependencies ready!\n")
@@ -77,15 +77,18 @@ else:
 # Start HTTP server for demo.html in background thread
 print("Starting servers...\n")
 
+
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         # Suppress the default HTTP server logging
         pass
 
+
 def start_http_server():
     os.chdir(str(contract_translator_dir))
-    server = HTTPServer(('localhost', 8000), QuietHTTPRequestHandler)
+    server = HTTPServer(("localhost", 8000), QuietHTTPRequestHandler)
     server.serve_forever()
+
 
 http_thread = threading.Thread(daemon=True, target=start_http_server)
 http_thread.start()
@@ -97,19 +100,20 @@ print(f"   [2/3] Translation API starting on http://localhost:5000 ({impl_mode})
 try:
     # Pass environment variable to child process
     env = os.environ.copy()
-    env['USE_MODULAR_CORE'] = 'true' if use_modular else 'false'
-    
+    env["USE_MODULAR_CORE"] = "true" if use_modular else "false"
+
     # Use Popen to start in FOREGROUND so we can see logs
     chatbot_process = subprocess.Popen(
         [sys.executable, str(mcp_dir / "chatbot_api.py")],
         cwd=str(workspace_root),
-        env=env
+        env=env,
     )
-    
+
     # Wait for HTTP server to be ready before opening browser
     print("Waiting for servers to initialize")
-    
+
     import socket
+
     def wait_for_server(host, port, timeout=10):
         """Wait until server is accepting connections"""
         start = time.time()
@@ -120,23 +124,23 @@ try:
             except (socket.error, ConnectionRefusedError):
                 time.sleep(0.2)
         return False
-    
+
     # Wait for HTTP server (port 8000)
-    if wait_for_server('localhost', 8000, timeout=5):
+    if wait_for_server("localhost", 8000, timeout=5):
         print("   HTTP server ready on port 8000")
     else:
         print("   HTTP server slow to start, continuing anyway...")
-    
+
     # Wait for Flask API (port 5000) to be ready
-    if wait_for_server('localhost', 5000, timeout=10):
+    if wait_for_server("localhost", 5000, timeout=10):
         print("   Flask API ready on port 5000")
     else:
         print("   Flask API slow to start, continuing anyway...")
-    
+
     print("\n   [3/3] Opening demo pages in browser\n")
     demo_url = "http://localhost:8000/demo.html"
     sampler_url = "http://localhost:8000/sampler.html"
-    
+
     try:
         webbrowser.open(demo_url)
         print(f"   Demo opened: {demo_url}")
@@ -148,18 +152,22 @@ try:
         print(f"   → Please open manually:")
         print(f"      Demo: {demo_url}")
         print(f"      Sampler: {sampler_url}\n")
-    
-    print("="*70)
+
+    print("=" * 70)
     print("DEMO IS READY!")
-    print("="*70)
+    print("=" * 70)
     print("\nWhat's running:")
     print("   • Translation Demo: http://localhost:8000/demo.html")
     print("   • Dataset Browser: http://localhost:8000/sampler.html")
     print(f"   • Translation API: http://localhost:5000 ({impl_mode})")
     if not use_modular:
-        print("\nUsing LEGACY implementation. Set USE_MODULAR_CORE=true to use new modular core.")
+        print(
+            "\nUsing LEGACY implementation. Set USE_MODULAR_CORE=true to use new modular core."
+        )
     else:
-        print("\nUsing MODULAR core package. Set USE_MODULAR_CORE=false to use legacy version.")
+        print(
+            "\nUsing MODULAR core package. Set USE_MODULAR_CORE=false to use legacy version."
+        )
     print("\nResearch Workflow:")
     print("   1. Browse dataset: http://localhost:8000/sampler.html")
     print("   2. Click 'Open in Demo' to load a contract")
@@ -167,7 +175,7 @@ try:
     print("   4. Translate & evaluate generated Solidity contracts")
     print("\nDataset: requirement_fsm_code.jsonl (21,976 contracts)")
     print("\nLogs below (Ctrl+C to stop):\n")
-    
+
     # Keep the process alive
     chatbot_process.wait()
 

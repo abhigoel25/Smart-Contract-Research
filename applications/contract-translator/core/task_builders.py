@@ -116,34 +116,64 @@ OBLIGATIONS MUST NOT BE EMPTY if any functions or operations are described."""
 
 def create_solidity_generation_prompt(schema):
     conditions = schema.conditions if schema.conditions else {}
-    function_names = conditions.get('function_names', [])
-    variable_names = conditions.get('variable_names', [])
-    state_names = conditions.get('state_names', [])
-    state_transitions = conditions.get('state_transitions', [])
-    events = conditions.get('events', [])
-    logic_conditions = conditions.get('logic_conditions', [])
+    function_names = conditions.get("function_names", [])
+    variable_names = conditions.get("variable_names", [])
+    state_names = conditions.get("state_names", [])
+    state_transitions = conditions.get("state_transitions", [])
+    events = conditions.get("events", [])
+    logic_conditions = conditions.get("logic_conditions", [])
     # Detect contract type from type field and function names
     ct = (schema.contract_type or "").lower()
     fn_lower = [f.lower() for f in function_names]
 
-    is_token = (
-        "token" in ct
-        or any(f in fn_lower for f in ["transfer", "approve", "transferfrom", "balanceof", "totalsupply", "mint", "burn"])
+    is_token = "token" in ct or any(
+        f in fn_lower
+        for f in [
+            "transfer",
+            "approve",
+            "transferfrom",
+            "balanceof",
+            "totalsupply",
+            "mint",
+            "burn",
+        ]
     )
     is_governance = (
-        "governance" in ct or "voting" in ct
-        or any(f in fn_lower for f in ["delegate", "vote", "propose", "execute", "getpriorvotes", "castballot"])
+        "governance" in ct
+        or "voting" in ct
+        or any(
+            f in fn_lower
+            for f in [
+                "delegate",
+                "vote",
+                "propose",
+                "execute",
+                "getpriorvotes",
+                "castballot",
+            ]
+        )
     )
     is_escrow = (
-        "escrow" in ct or "payment" in ct or "lending" in ct or "loan" in ct
-        or any(f in fn_lower for f in ["deposit", "release", "refund", "repay", "collateral"])
+        "escrow" in ct
+        or "payment" in ct
+        or "lending" in ct
+        or "loan" in ct
+        or any(
+            f in fn_lower
+            for f in ["deposit", "release", "refund", "repay", "collateral"]
+        )
     )
     is_marketplace = (
-        "marketplace" in ct or "auction" in ct or "nft" in ct or "sale" in ct
+        "marketplace" in ct
+        or "auction" in ct
+        or "nft" in ct
+        or "sale" in ct
         or any(f in fn_lower for f in ["list", "bid", "buy", "purchase", "auction"])
     )
     is_staking = (
-        "staking" in ct or "reward" in ct or "yield" in ct
+        "staking" in ct
+        or "reward" in ct
+        or "yield" in ct
         or any(f in fn_lower for f in ["stake", "unstake", "claim", "harvest"])
     )
 
@@ -209,7 +239,9 @@ STAKING/REWARDS — MANDATORY:
             )
     if logic_conditions:
         for lc in logic_conditions:
-            temporal_lines.append(f"- Business rule: {lc} → implement as require() check or modifier using actual state/mappings")
+            temporal_lines.append(
+                f"- Business rule: {lc} → implement as require() check or modifier using actual state/mappings"
+            )
     if schema.financial_terms:
         for t in schema.financial_terms:
             freq = f", recurring {t.frequency}" if t.frequency else ", one-time"
@@ -220,7 +252,11 @@ STAKING/REWARDS — MANDATORY:
 
     temporal_section = ""
     if temporal_lines:
-        temporal_section = "\nTEMPORAL AND FINANCIAL LOGIC TO IMPLEMENT:\n" + "\n".join(temporal_lines) + "\n"
+        temporal_section = (
+            "\nTEMPORAL AND FINANCIAL LOGIC TO IMPLEMENT:\n"
+            + "\n".join(temporal_lines)
+            + "\n"
+        )
 
     # Obligations
     obligation_lines = ""
@@ -232,7 +268,9 @@ STAKING/REWARDS — MANDATORY:
             for o in schema.obligations
         )
     else:
-        obligation_lines = "Derive obligations from function_names and contract purpose above."
+        obligation_lines = (
+            "Derive obligations from function_names and contract purpose above."
+        )
 
     # Party access control
     party_lines = ""
@@ -384,20 +422,23 @@ Aim for 150–400 lines. Completeness and correctness over brevity.
 """
 
 
-
 def create_mcp_task_description(abi, schema, contract_name: str) -> str:
     """
     Create task description for the MCP Server Generator Agent.
     Uses the comprehensive prompt from programs.py.
     """
     # Extract function information from ABI
-    functions = [item for item in abi if item.get('type') == 'function']
-    payable_functions = [f for f in functions if f.get('stateMutability') == 'payable']
-    nonpayable_functions = [f for f in functions if f.get('stateMutability') == 'nonpayable']
-    view_functions = [f for f in functions if f.get('stateMutability') in ['view', 'pure']]
-    
+    functions = [item for item in abi if item.get("type") == "function"]
+    payable_functions = [f for f in functions if f.get("stateMutability") == "payable"]
+    nonpayable_functions = [
+        f for f in functions if f.get("stateMutability") == "nonpayable"
+    ]
+    view_functions = [
+        f for f in functions if f.get("stateMutability") in ["view", "pure"]
+    ]
+
     import json
-    
+
     return f"""Generate a complete MCP server for this {schema.contract_type} smart contract.
 
 CONTRACT NAME: {contract_name}
@@ -430,20 +471,20 @@ Generate a Python MCP server file with CORRECT FastMCP API:
    import json
    from pathlib import Path
    from dotenv import load_dotenv
-   
+
    # Load .env from the same directory as this script
    env_path = Path(__file__).parent / '.env'
    load_dotenv(dotenv_path=env_path)
-   
+
    # Load ABI from the same directory as this script
    abi_path = Path(__file__).parent / '{contract_name}.abi.json'
    with open(abi_path, 'r') as f:
        contract_abi = json.load(f)
-   
+
    RPC_URL = os.getenv('RPC_URL')
    PRIVATE_KEY = os.getenv('PRIVATE_KEY')
    CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
-   
+
    web3 = Web3(Web3.HTTPProvider(RPC_URL))
    account = web3.eth.account.from_key(PRIVATE_KEY)
    contract = web3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=contract_abi)
@@ -455,21 +496,21 @@ Generate a Python MCP server file with CORRECT FastMCP API:
    ```
 
 4. **Create @mcp.tool() decorated functions for EACH ABI function**:
-   
+
    For PAYABLE functions:
    - Build transaction with correct value
    - Sign and send transaction
    - Return {{"tx_hash": hash}}
-   
+
    For NON-PAYABLE functions:
    - Build transaction (no value)
    - Sign and send transaction
    - Return {{"tx_hash": hash}}
-   
+
    For VIEW functions:
    - Call function (read-only)
    - Return result directly
-   
+
 5. **Documentation**:
    - Each @mcp.tool() function must have docstring
    - Explain what it does, who can call it, parameters, return value
@@ -566,7 +607,7 @@ def create_audit_task_description(solidity_code: str) -> str:
 
 SYSTEMATIC AUDIT CHECKLIST - Check each category:
 
-1. **REENTRANCY ATTACKS**: 
+1. **REENTRANCY ATTACKS**:
    - Look for external calls (call, transfer, send, delegatecall) followed by state changes
    - Check if state is updated BEFORE external calls (Checks-Effects-Interactions pattern)
    - Verify reentrancy guards (nonReentrant modifier) on sensitive functions
@@ -633,7 +674,7 @@ def create_abi_generator_task_description(solidity_code: str) -> str:
 
 REQUIREMENTS - Extract ALL of these:
 
-1. **CONSTRUCTOR**: 
+1. **CONSTRUCTOR**:
    - Include ALL constructor parameters with exact types (address, uint256, string, etc.)
    - stateMutability should be "nonpayable" unless constructor is payable
    - type: "constructor"
@@ -693,28 +734,36 @@ Return ONLY the JSON array (no markdown, no explanation):
 ]"""
 
 
-def create_quality_evaluation_task_description(solidity_code: str, schema, contract_name: str) -> str:
+def create_quality_evaluation_task_description(
+    solidity_code: str, schema, contract_name: str
+) -> str:
     """
     Create task description for the Quality Evaluator Agent.
     Performs comprehensive multi-metric evaluation of generated contract quality.
     """
     # Handle both Pydantic models and dictionaries
     if isinstance(schema, dict):
-        conditions = schema.get('conditions', {})
+        conditions = schema.get("conditions", {})
         schema_dict = schema
     else:
-        conditions = schema.conditions if hasattr(schema, 'conditions') and schema.conditions else {}
-        schema_dict = schema.model_dump() if hasattr(schema, 'model_dump') else schema.dict()
-    
-    function_names = conditions.get('function_names', [])
-    variable_names = conditions.get('variable_names', [])
-    state_names = conditions.get('state_names', [])
-    state_transitions = conditions.get('state_transitions', [])
-    events = conditions.get('events', [])
-    logic_conditions = conditions.get('logic_conditions', [])
-    
+        conditions = (
+            schema.conditions
+            if hasattr(schema, "conditions") and schema.conditions
+            else {}
+        )
+        schema_dict = (
+            schema.model_dump() if hasattr(schema, "model_dump") else schema.dict()
+        )
+
+    function_names = conditions.get("function_names", [])
+    variable_names = conditions.get("variable_names", [])
+    state_names = conditions.get("state_names", [])
+    state_transitions = conditions.get("state_transitions", [])
+    events = conditions.get("events", [])
+    logic_conditions = conditions.get("logic_conditions", [])
+
     import json
-    
+
     return f"""Perform a comprehensive quality evaluation of this generated Solidity smart contract against the original natural language specification.
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1074,21 +1123,21 @@ Return ONLY valid JSON (no markdown, no explanation):
 {{
   "contract_name": "{contract_name}",
   "evaluation_timestamp": "ISO timestamp",
-  
+
   "metric_1_functional_completeness": {{
     "score": 0-100,
     "function_matching": {{}},
     "implementation_quality": {{}},
     "evidence": []
   }},
-  
+
   "metric_2_variable_fidelity": {{
     "score": 0-100,
     "state_variables": {{}},
     "function_parameters": {{}},
     "evidence": []
   }},
-  
+
   "metric_3_state_machine": {{
     "score": 0-100,
     "state_definition": {{}},
@@ -1096,7 +1145,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     "state_guards": {{}},
     "evidence": []
   }},
-  
+
   "metric_4_business_logic": {{
     "score": 0-100,
     "obligation_implementation": {{}},
@@ -1105,7 +1154,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     "conditional_logic": {{}},
     "evidence": []
   }},
-  
+
   "metric_5_code_quality": {{
     "score": 0-100,
     "placeholder_detection": {{}},
@@ -1115,7 +1164,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     "documentation": {{}},
     "evidence": []
   }},
-  
+
   "composite_score": {{
     "functional_completeness_weighted": 0-25,
     "variable_fidelity_weighted": 0-15,
@@ -1125,7 +1174,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     "final_score": 0-100,
     "grade": "A|B|C|D|F"
   }},
-  
+
   "summary": {{
     "strengths": [
       "For EACH metric that scored >75, provide specific detail: 'Metric X (Score Y): [specific achievement with evidence/line numbers]'",

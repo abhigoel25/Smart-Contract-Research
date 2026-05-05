@@ -65,7 +65,8 @@ def main():
         batch_path = os.path.join(BATCHES_ROOT, batch)
         # Only include subdirectories that contain at least a .sol or quality_evaluation.json
         subdirs = sorted(
-            d for d in os.listdir(batch_path)
+            d
+            for d in os.listdir(batch_path)
             if os.path.isdir(os.path.join(batch_path, d))
         )
         batch_copied = 0
@@ -88,7 +89,9 @@ def main():
                 shutil.copy2(sol_files[0], os.path.join(dest_path, "contract.sol"))
 
             if os.path.exists(quality_eval):
-                shutil.copy2(quality_eval, os.path.join(dest_path, "quality_evaluation.json"))
+                shutil.copy2(
+                    quality_eval, os.path.join(dest_path, "quality_evaluation.json")
+                )
 
             counter += 1
             batch_copied += 1
@@ -96,7 +99,9 @@ def main():
         print(f"  {batch}: copied {batch_copied} contract folders")
 
     total_folders = counter - 1
-    print(f"\nDone. contracts/ contains {total_folders} folders (0001 – {total_folders:04d})")
+    print(
+        f"\nDone. contracts/ contains {total_folders} folders (0001 – {total_folders:04d})"
+    )
 
 
 if __name__ == "__main__":

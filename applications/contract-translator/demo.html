@@ -14,7 +14,7 @@
     console.log('React loaded:', typeof React !== 'undefined');
     console.log('ReactDOM loaded:', typeof ReactDOM !== 'undefined');
     console.log('Babel loaded:', typeof Babel !== 'undefined');
-    
+
     window.addEventListener('error', function(e) {
       console.error('Global error:', e.error);
       document.body.innerHTML = '<div style="padding: 20px; background: #f8d7da; color: #721c24; font-family: monospace;"><h1>Error Loading Demo</h1><pre>' + e.error + '</pre></div>';
@@ -66,7 +66,7 @@
         output: '',
         progress: 0
       });
-      
+
       // Post-generation state
       const [generatedData, setGeneratedData] = useState({
         solidity: '',
@@ -81,7 +81,7 @@
       const [auditData, setAuditData] = useState(null);
       const [currentSessionId, setCurrentSessionId] = useState(null);
       const [groundTruthCode, setGroundTruthCode] = useState('');
-      
+
       // View toggle state for switching between quality eval and ground truth comparison
       const [activeView, setActiveView] = useState('quality'); // 'quality' or 'comparison'
 
@@ -132,33 +132,33 @@
       // Start translation process - WITH REAL-TIME SERVER-SENT EVENTS STREAMING AND AUDIT APPROVAL
       const startTranslation = async () => {
         setPhase(1);
-        
+
         if (!contractText || !contractText.trim()) {
           alert("Please enter a contract description first");
           return;
         }
-        
+
         try {
           // Create FormData with the text contract
           const formData = new FormData();
           formData.append('contract_text', contractText);
           formData.append('contract_type', contractType);
-          
+
           // Add ground truth code if available
           if (groundTruthCode && groundTruthCode.trim()) {
             formData.append('ground_truth_code', groundTruthCode);
             console.log('📊 Including ground truth code for comparison');
           }
-          
+
           console.log('🔵 Starting real-time SSE stream to /api/translate-stream');
           console.log('   Contract text length:', contractText.length);
-          
+
           // Call the translation API with Server-Sent Events
           const response = await fetch('http://localhost:5000/api/translate-stream', {
             method: 'POST',
             body: formData
           });
-          
+
           console.log('🟡 SSE connection established, status:', response.status);
 
           if (!response.ok) {
@@ -190,7 +190,7 @@
                 try {
                   const eventData = JSON.parse(line.slice(6));
                   console.log(`📡 Phase ${eventData.phase} event received:`, eventData.data.message);
-                  
+
                   if (eventData.error) {
                     console.error('❌ Stream error:', eventData.error);
                     throw new Error(eventData.error);
@@ -202,17 +202,17 @@
                     setPhase(4);
                     setAuditData(eventData.data);
                     setCurrentSessionId(eventData.session_id);
-                    
+
                     setCurrentPhaseInfo({
                       title: 'Security Audit - Review Required',
                       status: '⏸️ Waiting for Approval',
                       output: `Security issues detected - please review and approve to continue`,
                       progress: 65
                     });
-                    
+
                     // Show the audit modal
                     setShowAuditModal(true);
-                    
+
                     // Wait for user to make a decision
                     // This will be handled by the handleAuditApproval function
                     continue; // Don't process further until user responds
@@ -254,14 +254,14 @@
                       terms_count: Array.isArray(schemaToStore.financial_terms) ? schemaToStore.financial_terms.length : 0
                     });
                   }
-                  
+
                   if (eventData.data.solidity) {
                     setGeneratedData(prev => ({ ...prev, solidity: eventData.data.solidity }));
                     console.log('✅ Solidity code stored:', eventData.data.solidity.substring(0, 100) + '...');
                   }
                   if (eventData.data.abi) {
-                    const abiData = typeof eventData.data.abi === 'string' 
-                      ? eventData.data.abi 
+                    const abiData = typeof eventData.data.abi === 'string'
+                      ? eventData.data.abi
                       : JSON.stringify(eventData.data.abi, null, 2);
                     setGeneratedData(prev => ({ ...prev, abi: abiData }));
                     console.log('✅ ABI stored');
@@ -274,15 +274,15 @@
                     setGeneratedData(prev => ({ ...prev, quality: eventData.data.quality_evaluation }));
                     console.log('✅ Quality evaluation stored');
                   }
-                  
+
                   // Handle ground truth comparison event
                   if (eventData.phase === 'ground_truth' && eventData.data) {
                     console.log('📊 Ground truth event received:', eventData.data);
                     console.log('  - Metrics:', eventData.data.metrics);
                     console.log('  - Current phase before update:', phase);
-                    setGeneratedData(prev => ({ 
-                      ...prev, 
-                      groundTruthComparison: eventData.data 
+                    setGeneratedData(prev => ({
+                      ...prev,
+                      groundTruthComparison: eventData.data
                     }));
                     console.log('✅ Ground truth comparison:', {
                       generated: eventData.data.generated_score,
@@ -316,7 +316,7 @@
       // Handle audit approval/rejection
       const handleAuditApproval = async (approved) => {
         console.log(`📝 User ${approved ? 'approved' : 'rejected'} security audit`);
-        
+
         try {
           // Send approval to backend
           const response = await fetch('http://localhost:5000/api/audit-approval', {
@@ -334,7 +334,7 @@
 
           console.log('✓ Approval sent to backend');
           setShowAuditModal(false);
-          
+
           if (approved) {
             setCurrentPhaseInfo(prev => ({
               ...prev,
@@ -378,7 +378,7 @@
             {phase === 0 && (
               <div className="bg-gray-800 rounded-2xl p-8 mb-8 border border-gray-700">
                 <h2 className="text-2xl font-bold text-white mb-6">📝 Enter Contract Description</h2>
-                
+
                 <div className="bg-blue-900/30 rounded-lg p-4 border border-blue-400 mb-6">
                   <p className="text-sm text-blue-200 font-semibold mb-2">🔬 Research Mode</p>
                   <p className="text-xs text-gray-300">
@@ -437,7 +437,7 @@
                         </div>
                       </div>
                       <p className="text-gray-300 text-sm mb-4">💡 You can manually override this by selecting a different type below</p>
-                      
+
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {contractTypes.map(type => (
                           <button
@@ -471,9 +471,9 @@
             {/* Phases 1-5: Process Display */}
             {phase > 0 && phase < 7 && (
               <div className="bg-gray-800 rounded-2xl p-8 mb-8 border border-gray-700">
-                <StepIndicator 
-                  current={phase} 
-                  total={7} 
+                <StepIndicator
+                  current={phase}
+                  total={7}
                   labels={phaseDescriptions.map(p => p.title.split(':')[1].trim())}
                 />
 
@@ -492,7 +492,7 @@
                     </div>
                     <p className="text-gray-300 mb-4">{currentPhaseInfo.output}</p>
                     <div className="w-full bg-gray-600 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
                         style={{ width: `${currentPhaseInfo.progress}%` }}
                       />
@@ -578,7 +578,7 @@
                         </div>
                       </div>
                       <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-1000"
                           style={{ width: `${generatedData.quality.composite_score?.final_score || 0}%` }}
                         ></div>
@@ -723,7 +723,7 @@
                 {/* Metric Comparison */}
                 <div className="space-y-3">
                   <h4 className="text-lg font-bold text-white mb-3">📈 Detailed Breakdown</h4>
-                  
+
                   {/* Functional Completeness */}
                   <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
                     <div className="flex items-center justify-between mb-2">
@@ -904,7 +904,7 @@
                       <p className="text-gray-300 mb-6">
                         Your smart contract has been successfully generated and evaluated! Download the files below for research, analysis, or manual deployment.
                       </p>
-                      
+
                       <div className="bg-gray-900 rounded-lg p-4 border border-green-600 space-y-3">
                         <div className="flex items-center gap-2 text-green-400 font-semibold">
                           <span>✅</span>
@@ -918,11 +918,11 @@
                       <div className="bg-blue-900/30 rounded-lg p-4 border border-blue-400">
                         <p className="text-sm text-blue-200 font-semibold mb-2">💡 Research Focus</p>
                         <p className="text-xs text-gray-300">
-                          This project focuses on evaluating smart contract generation quality. 
+                          This project focuses on evaluating smart contract generation quality.
                           You can manually deploy contracts for testing using Remix IDE or other tools.
                         </p>
                       </div>
-                      
+
                       <div className="space-y-2">
                       </div>
                     </div>

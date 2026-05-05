@@ -38,15 +38,15 @@ Usage:
       --output_dir ./results/debiased
 """
 
+import argparse
+import json
 import os
 import re
-import sys
-import json
-import time
-import argparse
-import tempfile
-import traceback
 import statistics
+import sys
+import tempfile
+import time
+import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -63,23 +63,24 @@ if _env_file.exists():
             _k, _, _v = _line.partition("=")
             os.environ.setdefault(_k.strip(), _v.strip())
 
+from crewai import Agent, Crew, Task
 from experiment_utils import (
-    load_dataset,
-    load_results,
-    extract_scores,
-    save_results,
     append_result,
     compute_statistics,
+    extract_scores,
+    load_dataset,
+    load_results,
+    save_results,
 )
-from applications.translator import IBMAgenticContractTranslator
-from applications.task_builders import create_quality_evaluation_task_description
-from applications.solidity_compiler import SolidityCompilationChecker
-from crewai import Agent, Task, Crew
 
+from applications.solidity_compiler import SolidityCompilationChecker
+from applications.task_builders import create_quality_evaluation_task_description
+from applications.translator import IBMAgenticContractTranslator
 
 # ────────────────────────────────────────────────────────────────────────────
 # Semantic name matching utilities
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def camel_to_snake(name: str) -> str:
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
@@ -87,14 +88,14 @@ def camel_to_snake(name: str) -> str:
 
 
 COMMON_SYNONYMS: Dict[str, List[str]] = {
-    "amount":    ["value", "qty", "quantity", "amt"],
-    "owner":     ["admin", "creator", "deployer", "manager"],
+    "amount": ["value", "qty", "quantity", "amt"],
+    "owner": ["admin", "creator", "deployer", "manager"],
     "recipient": ["to", "receiver", "dest", "destination"],
-    "sender":    ["from", "caller", "msg_sender"],
-    "balance":   ["funds", "deposit", "holdings"],
+    "sender": ["from", "caller", "msg_sender"],
+    "balance": ["funds", "deposit", "holdings"],
     "timestamp": ["time", "createdAt", "blockTime"],
-    "approved":  ["authorized", "permitted", "allowed"],
-    "deadline":  ["expiry", "expiration", "endTime", "dueDate"],
+    "approved": ["authorized", "permitted", "allowed"],
+    "deadline": ["expiry", "expiration", "endTime", "dueDate"],
 }
 
 SYNONYM_MAP: Dict[str, str] = {}
@@ -108,7 +109,7 @@ for canonical, synonyms in COMMON_SYNONYMS.items():
 def semantic_normalise(name: str) -> str:
     """Normalise a variable/function name to a canonical form."""
     lowered = name.lower()
-    snake   = camel_to_snake(name)
+    snake = camel_to_snake(name)
     return SYNONYM_MAP.get(lowered) or SYNONYM_MAP.get(snake) or snake
 
 
@@ -118,13 +119,10 @@ def compute_semantic_name_overlap(spec_names: List[str], gt_names: List[str]) ->
     at least one specification name.  Returns a score in [0, 1].
     """
     if not spec_names or not gt_names:
-        return 1.0   # nothing to compare → no penalty
+        return 1.0  # nothing to compare → no penalty
 
     spec_normalised = {semantic_normalise(n) for n in spec_names}
-    matches = sum(
-        1 for n in gt_names
-        if semantic_normalise(n) in spec_normalised
-    )
+    matches = sum(1 for n in gt_names if semantic_normalise(n) in spec_normalised)
     return matches / len(gt_names)
 
 
@@ -136,7 +134,7 @@ def extract_identifiers(solidity_code: str) -> Tuple[List[str], List[str]]:
     func_names = re.findall(
         r"\bfunction\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", solidity_code
     )
-    var_names  = re.findall(
+    var_names = re.findall(
         r"^\s*(?:uint\d*|int\d*|address|bool|bytes\d*|string|mapping)\s+"
         r"(?:public|private|internal|external)?\s*"
         r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[=;]",
@@ -150,11 +148,12 @@ def extract_identifiers(solidity_code: str) -> Tuple[List[str], List[str]]:
 # Debiased M2 rescorer
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def debias_m2(
     original_m2_score: float,
-    generated_code:    str,
+    generated_code: str,
     ground_truth_code: str,
-    spec_text:         str,
+    spec_text: str,
 ) -> Dict:
     """
     Re-compute M2 (Variable Fidelity) using semantic matching.
@@ -173,25 +172,25 @@ def debias_m2(
         }
     """
     # Extract identifiers from both contracts
-    gen_funcs, gen_vars   = extract_identifiers(generated_code)
-    gt_funcs,  gt_vars    = extract_identifiers(ground_truth_code)
+    gen_funcs, gen_vars = extract_identifiers(generated_code)
+    gt_funcs, gt_vars = extract_identifiers(ground_truth_code)
 
     # Extract identifiers mentioned in the spec (simple heuristic: capitalised words)
     spec_idents = re.findall(r"\b([a-z][a-zA-Z]{3,})\b", spec_text)
 
     gen_overlap = compute_semantic_name_overlap(spec_idents, gen_funcs + gen_vars)
-    gt_overlap  = compute_semantic_name_overlap(spec_idents, gt_funcs  + gt_vars)
+    gt_overlap = compute_semantic_name_overlap(spec_idents, gt_funcs + gt_vars)
 
     # Scale overlap to [0, 100] — preserve relative ordering
     debiased_gen = round(gen_overlap * 100, 1)
-    debiased_gt  = round(gt_overlap  * 100, 1)
+    debiased_gt = round(gt_overlap * 100, 1)
 
     return {
-        "original_m2":             original_m2_score,
-        "debiased_m2_generated":   debiased_gen,
+        "original_m2": original_m2_score,
+        "debiased_m2_generated": debiased_gen,
         "debiased_m2_ground_truth": debiased_gt,
-        "delta_change":            round(debiased_gt - debiased_gen, 2),
-        "method":                  "semantic_normalisation_with_synonym_map",
+        "delta_change": round(debiased_gt - debiased_gen, 2),
+        "method": "semantic_normalisation_with_synonym_map",
     }
 
 
@@ -238,7 +237,9 @@ def debias_m4_llm(
     prompt that explicitly instructs the evaluator not to penalise gas
     optimisations or structural deviations.
     """
-    prompt = DEBIASED_M4_PROMPT.format(spec=spec_text[:2000], code=ground_truth_code[:3000])
+    prompt = DEBIASED_M4_PROMPT.format(
+        spec=spec_text[:2000], code=ground_truth_code[:3000]
+    )
 
     task = Task(
         description=prompt,
@@ -267,6 +268,7 @@ def debias_m4_llm(
 # Main per-pair analysis
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def analyse_pair(
     generated_result: Dict,
     ground_truth_code: str,
@@ -279,18 +281,18 @@ def analyse_pair(
     compute debiased scores and return the delta comparison.
     """
     gen_code = generated_result.get("solidity", "")
-    gen_qe   = generated_result.get("quality_evaluation") or {}
+    gen_qe = generated_result.get("quality_evaluation") or {}
     orig_gen_scores = extract_scores(gen_qe)
 
     result = {
-        "index":             generated_result.get("index"),
-        "original_gen_m2":   orig_gen_scores["m2"],
-        "original_gen_m4":   orig_gen_scores["m4"],
+        "index": generated_result.get("index"),
+        "original_gen_m2": orig_gen_scores["m2"],
+        "original_gen_m4": orig_gen_scores["m4"],
         "original_composite_gen": orig_gen_scores["composite"],
-        "debiased_m2":       None,
-        "debiased_m4_gt":    None,
+        "debiased_m2": None,
+        "debiased_m4_gt": None,
         "debiased_composite_delta": None,
-        "error":             None,
+        "error": None,
     }
 
     try:
@@ -310,17 +312,28 @@ def analyse_pair(
             # m1/m3/m5 but debiased m2 and m4.
             # Prefer actual GT quality evaluation scores from experiment_1 results;
             # fall back to conservative estimate if not available.
-            gt_qe   = generated_result.get("ground_truth_quality_evaluation")
+            gt_qe = generated_result.get("ground_truth_quality_evaluation")
             orig_gt = extract_scores(gt_qe) if gt_qe else {}
-            gt_m1   = orig_gt.get("m1") if orig_gt.get("m1") else orig_gen_scores["m1"] * 0.9
-            gt_m3   = orig_gt.get("m3") if orig_gt.get("m3") else orig_gen_scores["m3"] * 0.85
-            gt_m5   = orig_gt.get("m5") if orig_gt.get("m5") else orig_gen_scores["m5"] * 0.90
-            gt_m2_debiased = m2_result.get("debiased_m2_ground_truth", orig_gen_scores["m2"])
+            gt_m1 = (
+                orig_gt.get("m1") if orig_gt.get("m1") else orig_gen_scores["m1"] * 0.9
+            )
+            gt_m3 = (
+                orig_gt.get("m3") if orig_gt.get("m3") else orig_gen_scores["m3"] * 0.85
+            )
+            gt_m5 = (
+                orig_gt.get("m5") if orig_gt.get("m5") else orig_gen_scores["m5"] * 0.90
+            )
+            gt_m2_debiased = m2_result.get(
+                "debiased_m2_ground_truth", orig_gen_scores["m2"]
+            )
             gt_m4_debiased = m4_result.get("score") or orig_gen_scores["m4"]
 
             debiased_composite_gt = (
-                gt_m1 * 0.25 + gt_m2_debiased * 0.15 +
-                gt_m3 * 0.15 + gt_m4_debiased * 0.35 + gt_m5 * 0.10
+                gt_m1 * 0.25
+                + gt_m2_debiased * 0.15
+                + gt_m3 * 0.15
+                + gt_m4_debiased * 0.35
+                + gt_m5 * 0.10
             )
             result["debiased_composite_gt"] = round(debiased_composite_gt, 2)
             result["debiased_composite_delta"] = round(
@@ -338,13 +351,23 @@ def analyse_pair(
 # Reporting
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def print_debiased_report(results: List[Dict]) -> None:
-    orig_deltas    = [r["debiased_composite_delta"] for r in results
-                      if r.get("debiased_composite_delta") is not None]
-    orig_composites = [r["original_composite_gen"] for r in results
-                       if r.get("original_composite_gen") is not None]
-    gt_composites   = [r.get("debiased_composite_gt") for r in results
-                       if r.get("debiased_composite_gt") is not None]
+    orig_deltas = [
+        r["debiased_composite_delta"]
+        for r in results
+        if r.get("debiased_composite_delta") is not None
+    ]
+    orig_composites = [
+        r["original_composite_gen"]
+        for r in results
+        if r.get("original_composite_gen") is not None
+    ]
+    gt_composites = [
+        r.get("debiased_composite_gt")
+        for r in results
+        if r.get("debiased_composite_gt") is not None
+    ]
 
     print(f"\n{'='*65}")
     print("  DEBIASED METRIC ANALYSIS — REBUTTAL TABLE")
@@ -353,11 +376,17 @@ def print_debiased_report(results: List[Dict]) -> None:
     if orig_deltas:
         mean_debiased_delta = round(statistics.mean(orig_deltas), 2)
         print(f"  Debiased gap (this experiment): +{mean_debiased_delta:.2f} points")
-        reduction = 8.29 - mean_debiased_delta          # positive = gap shrank, negative = gap widened
+        reduction = (
+            8.29 - mean_debiased_delta
+        )  # positive = gap shrank, negative = gap widened
         pct_change = abs(reduction) / 8.29 * 100
-        direction  = "reduction" if reduction >= 0 else "increase"
-        sign_str   = f"-{abs(reduction):.2f}" if reduction >= 0 else f"+{abs(reduction):.2f}"
-        print(f"  Gap {direction}:                  {sign_str} points  ({pct_change:.1f}% {'reduction' if reduction >= 0 else 'increase'} vs original gap)")
+        direction = "reduction" if reduction >= 0 else "increase"
+        sign_str = (
+            f"-{abs(reduction):.2f}" if reduction >= 0 else f"+{abs(reduction):.2f}"
+        )
+        print(
+            f"  Gap {direction}:                  {sign_str} points  ({pct_change:.1f}% {'reduction' if reduction >= 0 else 'increase'} vs original gap)"
+        )
         print()
         if reduction >= 0:
             # Gap shrank — supports reviewer's literal-matching critique
@@ -391,18 +420,24 @@ def print_debiased_report(results: List[Dict]) -> None:
 # Entry point
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="Debiased metric analysis")
-    parser.add_argument("--generated_results",
-                        default="./results/ablation/condition_C_iter1.jsonl",
-                        help="JSONL from experiment_1_ablation (Condition C)")
+    parser.add_argument(
+        "--generated_results",
+        default="./results/ablation/condition_C_iter1.jsonl",
+        help="JSONL from experiment_1_ablation (Condition C)",
+    )
     parser.add_argument("--dataset", default="requirement_code.jsonl")
     parser.add_argument("--n_samples", type=int, default=200)
-    parser.add_argument("--seed",      type=int, default=42)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", default="./results/debiased")
-    parser.add_argument("--model",     default="gpt-4o-mini")
-    parser.add_argument("--skip_llm_m4", action="store_true",
-                        help="Skip the LLM-based M4 re-evaluation (faster but less complete)")
+    parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument(
+        "--skip_llm_m4",
+        action="store_true",
+        help="Skip the LLM-based M4 re-evaluation (faster but less complete)",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -411,11 +446,15 @@ def main():
     # Load generated results from ablation experiment (Condition C)
     if Path(args.generated_results).exists():
         gen_results = load_results(args.generated_results)
-        print(f"[debiased] Loaded {len(gen_results)} generated results from {args.generated_results}")
+        print(
+            f"[debiased] Loaded {len(gen_results)} generated results from {args.generated_results}"
+        )
     else:
-        print(f"[debiased] WARNING: {args.generated_results} not found. Run experiment_1_ablation.py first.")
+        print(
+            f"[debiased] WARNING: {args.generated_results} not found. Run experiment_1_ablation.py first."
+        )
         print("[debiased] Running experiment with full pipeline generation ...")
-        gen_results = []   # will generate fresh below
+        gen_results = []  # will generate fresh below
 
     # Load ground-truth from dataset
     records = load_dataset(args.dataset, n_samples=args.n_samples, seed=args.seed)
@@ -430,13 +469,15 @@ def main():
 
     # Match generated results to ground-truth records
     pairs = []
-    for gen_r in gen_results[:args.n_samples]:
+    for gen_r in gen_results[: args.n_samples]:
         idx = gen_r.get("index")
         if idx in dataset_by_index:
             pairs.append((gen_r, dataset_by_index[idx]))
-    
+
     if not pairs:
-        print("[debiased] ERROR: No matching records found. Check that dataset indices match.")
+        print(
+            "[debiased] ERROR: No matching records found. Check that dataset indices match."
+        )
         sys.exit(1)
 
     print(f"[debiased] Analysing {len(pairs)} matched generated ↔ ground-truth pairs\n")
@@ -458,19 +499,29 @@ def main():
         analysis_results.append(r)
         append_result(r, debiased_path)
         delta = r.get("debiased_composite_delta")
-        print(f"  orig_delta={r.get('debiased_composite_delta', '?')}  time={round(time.time()-t0,1)}s")
+        print(
+            f"  orig_delta={r.get('debiased_composite_delta', '?')}  time={round(time.time()-t0,1)}s"
+        )
 
     save_results(analysis_results, str(output_dir / "debiased_analysis.jsonl"))
     print_debiased_report(analysis_results)
 
     # Save summary
-    deltas = [r["debiased_composite_delta"] for r in analysis_results if r.get("debiased_composite_delta") is not None]
+    deltas = [
+        r["debiased_composite_delta"]
+        for r in analysis_results
+        if r.get("debiased_composite_delta") is not None
+    ]
     summary = {
-        "n_pairs":              len(pairs),
+        "n_pairs": len(pairs),
         "original_paper_delta": 8.29,
-        "debiased_mean_delta":  round(statistics.mean(deltas), 3) if deltas else None,
-        "debiased_std_delta":   round(statistics.stdev(deltas), 3) if len(deltas) > 1 else None,
-        "pct_gap_closed":       round((8.29 - statistics.mean(deltas)) / 8.29 * 100, 1) if deltas else None,
+        "debiased_mean_delta": round(statistics.mean(deltas), 3) if deltas else None,
+        "debiased_std_delta": (
+            round(statistics.stdev(deltas), 3) if len(deltas) > 1 else None
+        ),
+        "pct_gap_closed": (
+            round((8.29 - statistics.mean(deltas)) / 8.29 * 100, 1) if deltas else None
+        ),
     }
     with open(output_dir / "debiased_summary.json", "w") as f:
         json.dump(summary, f, indent=2)

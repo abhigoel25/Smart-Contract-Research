@@ -1,27 +1,44 @@
 """
 Generate various contract PDFs for testing agentic_implementation.py
 """
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.units import inch
+
 from pathlib import Path
+
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
 
 def create_contract(filename, title, content):
     """Create a PDF contract"""
-    doc = SimpleDocTemplate(str(filename), pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(
+        str(filename), pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch
+    )
     story = []
     styles = getSampleStyleSheet()
-    style = ParagraphStyle(name='Body', parent=styles['Normal'], fontSize=10, leading=12)
-    title_style = ParagraphStyle(name='Title', parent=styles['Heading1'], fontSize=13, leading=15, spaceAfter=10, alignment=1)
-    
+    style = ParagraphStyle(
+        name="Body", parent=styles["Normal"], fontSize=10, leading=12
+    )
+    title_style = ParagraphStyle(
+        name="Title",
+        parent=styles["Heading1"],
+        fontSize=13,
+        leading=15,
+        spaceAfter=10,
+        alignment=1,
+    )
+
     story.append(Paragraph(title, title_style))
-    story.append(Spacer(1, 0.2*inch))
+    story.append(Spacer(1, 0.2 * inch))
     story.append(Paragraph(content, style))
     doc.build(story)
-    print(f'✓ {filename}')
+    print(f"✓ {filename}")
 
-contracts_dir = Path('c:\\Users\\abhin\\OneDrive\\Desktop\\Blockchain\\Agentics-blockchain\\contracts')
+
+contracts_dir = Path(
+    "c:\\Users\\abhin\\OneDrive\\Desktop\\Blockchain\\Agentics-blockchain\\contracts"
+)
 contracts_dir.mkdir(exist_ok=True)
 
 # 1. EMPLOYMENT CONTRACT
@@ -61,9 +78,9 @@ Employer: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'Employment_Contract.pdf',
-    'EMPLOYMENT AGREEMENT',
-    employment_content
+    contracts_dir / "Employment_Contract.pdf",
+    "EMPLOYMENT AGREEMENT",
+    employment_content,
 )
 
 # 2. SALES AGREEMENT
@@ -110,9 +127,7 @@ Buyer: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'Sales_Agreement.pdf',
-    'SALES AND PURCHASE AGREEMENT',
-    sales_content
+    contracts_dir / "Sales_Agreement.pdf", "SALES AND PURCHASE AGREEMENT", sales_content
 )
 
 # 3. LOAN AGREEMENT
@@ -158,9 +173,9 @@ Borrower: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'Loan_Agreement.pdf',
-    'PROMISSORY NOTE AND LOAN AGREEMENT',
-    loan_content
+    contracts_dir / "Loan_Agreement.pdf",
+    "PROMISSORY NOTE AND LOAN AGREEMENT",
+    loan_content,
 )
 
 # 4. SERVICE AGREEMENT
@@ -210,9 +225,7 @@ Client: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'Service_Agreement.pdf',
-    'SERVICE AGREEMENT',
-    service_content
+    contracts_dir / "Service_Agreement.pdf", "SERVICE AGREEMENT", service_content
 )
 
 # 5. NDA (Non-Disclosure Agreement)
@@ -258,9 +271,7 @@ Party B: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'NDA_Agreement.pdf',
-    'MUTUAL NON-DISCLOSURE AGREEMENT',
-    nda_content
+    contracts_dir / "NDA_Agreement.pdf", "MUTUAL NON-DISCLOSURE AGREEMENT", nda_content
 )
 
 # 6. PARTNERSHIP AGREEMENT
@@ -319,9 +330,9 @@ Partner C: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'Partnership_Agreement.pdf',
-    'PARTNERSHIP AGREEMENT',
-    partnership_content
+    contracts_dir / "Partnership_Agreement.pdf",
+    "PARTNERSHIP AGREEMENT",
+    partnership_content,
 )
 
 # 7. INVESTMENT AGREEMENT
@@ -377,9 +388,9 @@ Company Secretary: ___________________  Date: _____________
 """
 
 create_contract(
-    contracts_dir / 'Investment_Agreement.pdf',
-    'SERIES A PREFERRED STOCK PURCHASE AGREEMENT',
-    investment_content
+    contracts_dir / "Investment_Agreement.pdf",
+    "SERIES A PREFERRED STOCK PURCHASE AGREEMENT",
+    investment_content,
 )
 
 print("\n✓ All contracts generated successfully!")

@@ -179,7 +179,7 @@
 <body>
     <h1>Contract Dataset Sampler & Batch Evaluator</h1>
     <p>Load sample contracts from the research dataset (requirement_fsm_code.jsonl) or run batch evaluations</p>
-    
+
     <!-- Single Contract Controls -->
     <div class="controls">
         <h2 style="margin-top: 0;">Single Contract Mode</h2>
@@ -225,7 +225,7 @@
     <!-- Batch Results Display -->
     <div class="batch-results" id="batchResults">
         <h2>Batch Evaluation Results</h2>
-        
+
         <!-- Summary Statistics -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
             <div class="stat-card">
@@ -354,7 +354,7 @@
     <div class="contract-display" id="contractDisplay" style="display: none;">
         <h2>Contract Description</h2>
         <div class="contract-text" id="contractText"></div>
-        
+
         <div class="metadata" id="metadata"></div>
     </div>
 
@@ -371,16 +371,16 @@
         // Single Contract Functions
         async function loadRandomContract() {
             console.log('Loading random contract from dataset...');
-            
+
             try {
                 const response = await fetch('http://localhost:5000/api/random-contract');
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const data = await response.json();
-                
+
                 currentContract = {
                     user_requirement: data.user_requirement,
                     version: data.version,
@@ -388,10 +388,10 @@
                     reference_code: data.reference_code,
                     total_contracts: data.total_contracts
                 };
-                
+
                 console.log('Contract loaded from dataset:', currentContract);
                 displayContract();
-                
+
             } catch (error) {
                 console.error('Failed to load contract:', error);
                 alert('Failed to load contract from dataset. Make sure the API is running on http://localhost:5000');
@@ -403,7 +403,7 @@
 
             document.getElementById('contractDisplay').style.display = 'block';
             document.getElementById('contractText').textContent = currentContract.user_requirement;
-            
+
             const metadata = document.getElementById('metadata');
             metadata.innerHTML = `
                 <div class="metadata-item">
@@ -440,7 +440,7 @@
 
             localStorage.setItem('contract_text', currentContract.user_requirement);
             localStorage.setItem('contract_type', 'other');
-            
+
             // Also save ground truth code for comparison
             if (currentContract.reference_code) {
                 localStorage.setItem('ground_truth_code', currentContract.reference_code);
@@ -448,7 +448,7 @@
             } else {
                 console.warn('⚠️ No reference_code found in currentContract:', currentContract);
             }
-            
+
             console.log('Saving to localStorage and opening demo...');
             window.open('demo.html', '_blank');
             alert('Contract loaded into demo! Check the new tab.');
@@ -457,7 +457,7 @@
         // Batch Processing Functions
         function startBatchProcessing(resumeBatchId = null) {
             const numContracts = parseInt(document.getElementById('numContracts').value);
-            
+
             if (numContracts < 1 || numContracts > 1500) {
                 alert('Please enter a number between 1 and 1500');
                 return;
@@ -467,35 +467,35 @@
             if (resumeBatchId) {
                 console.log(`Resuming batch: ${resumeBatchId}`);
             }
-            
+
             // Show progress, hide results
             document.getElementById('batchProgress').style.display = 'block';
             document.getElementById('batchResults').style.display = 'none';
             document.getElementById('startBatchBtn').disabled = true;
             document.getElementById('stopBatchBtn').style.display = 'inline-block';
-            
+
             // Reset progress
             document.getElementById('progressFill').style.width = '0%';
             document.getElementById('progressFill').textContent = '0%';
             document.getElementById('progressText').textContent = resumeBatchId ? 'Resuming batch from checkpoint...' : 'Starting batch processing...';
-            
+
             // Initialize results storage
             batchResults = {
                 contracts: [],
                 statistics: {}
             };
-            
+
             // Prepare request body
             const requestBody = {
                 num_contracts: numContracts,
                 seed: Date.now()
             };
-            
+
             // Add batch_id if resuming
             if (resumeBatchId && resumeBatchId.trim()) {
                 requestBody.batch_id = resumeBatchId.trim();
             }
-            
+
             // Use fetch with SSE
             fetch('http://localhost:5000/api/batch-translate', {
                 method: 'POST',
@@ -506,7 +506,7 @@
             }).then(response => {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-                
+
                 function readStream() {
                     reader.read().then(({ done, value }) => {
                         if (done) {
@@ -514,21 +514,21 @@
                             finalizeBatch();
                             return;
                         }
-                        
+
                         const chunk = decoder.decode(value);
                         const lines = chunk.split('\n');
-                        
+
                         for (const line of lines) {
                             if (line.startsWith('data: ')) {
                                 const data = JSON.parse(line.substring(6));
                                 handleBatchEvent(data);
                             }
                         }
-                        
+
                         readStream();
                     });
                 }
-                
+
                 readStream();
             }).catch(error => {
                 console.error('Batch processing error:', error);
@@ -539,12 +539,12 @@
 
         function handleBatchEvent(event) {
             const type = event.type;
-            
+
             if (type === 'batch_progress') {
                 const progress = (event.current / event.total) * 100;
                 document.getElementById('progressFill').style.width = progress + '%';
                 document.getElementById('progressFill').textContent = Math.round(progress) + '%';
-                
+
                 // Show different message for skipped contracts
                 if (event.status === 'skipped') {
                     document.getElementById('progressText').textContent = `⏭️ Skipping contract ${event.current} of ${event.total} (already processed)`;
@@ -554,7 +554,7 @@
                 }
             }
             else if (type === 'contract_phase') {
-                const phaseNames = ['', 'Document Processing', 'Contract Analysis', 'Code Generation', 
+                const phaseNames = ['', 'Document Processing', 'Contract Analysis', 'Code Generation',
                                     'Security Audit', 'ABI Generation', 'MCP Server', 'Quality Evaluation'];
                 const phaseName = phaseNames[event.phase] || `Phase ${event.phase}`;
                 document.getElementById('phaseInfo').innerHTML = `
@@ -603,11 +603,11 @@
                 alert('Please enter a batch ID (e.g., 20260202_234755)');
                 return;
             }
-            
+
             batchId = batchId.trim().replace('batch_', ''); // Remove batch_ prefix if present
-            
+
             console.log(`Loading results for batch ${batchId}...`);
-            
+
             fetch(`http://localhost:5000/api/batch-results/${batchId}`)
                 .then(response => {
                     if (!response.ok) {
@@ -635,18 +635,18 @@
         function displayBatchResults() {
             const results = batchResults.aggregate;
             if (!results) return;
-            
+
             const stats = results.statistics;
-            
+
             // Show results section
             document.getElementById('batchResults').style.display = 'block';
-            
+
             // Update summary stats
             document.getElementById('avgScore').textContent = stats.average_score.toFixed(1);
             document.getElementById('totalContracts').textContent = results.total_contracts;
             document.getElementById('avgLatency').textContent = stats.average_latency.toFixed(1);
             document.getElementById('totalTime').textContent = stats.total_time.toFixed(1);
-            
+
             // Display compilation statistics if available
             if (stats.compilation_stats) {
                 const compStats = stats.compilation_stats;
@@ -655,50 +655,50 @@
                 document.getElementById('compiledFailed').textContent = compStats.failed || 0;
                 document.getElementById('compilationRate').textContent = `${compStats.success_rate.toFixed(1)}%`;
             }
-            
+
             // Display ground truth comparison if available
             if (stats.ground_truth_comparison && stats.ground_truth_comparison.total_compared > 0) {
                 const gtStats = stats.ground_truth_comparison;
                 document.getElementById('groundTruthStats').style.display = 'block';
                 document.getElementById('gtAvgGenerated').textContent = gtStats.avg_generated_score.toFixed(1);
                 document.getElementById('gtAvgGroundTruth').textContent = gtStats.avg_ground_truth_score.toFixed(1);
-                
+
                 const delta = gtStats.avg_score_delta;
                 const deltaEl = document.getElementById('gtDelta');
                 deltaEl.textContent = `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`;
                 deltaEl.style.color = delta > 0 ? '#00ff88' : (delta < 0 ? '#ff6b6b' : '#fff');
-                
+
                 document.getElementById('gtBetter').textContent = gtStats.generated_better_count || 0;
                 document.getElementById('gtWorse').textContent = gtStats.ground_truth_better_count || 0;
             }
-            
+
             // Create score distribution chart
             createScoreDistributionChart(results.individual_results);
-            
+
             // Create metric scores chart
             createMetricScoresChart(stats.metric_averages);
-            
+
             // Create grade distribution chart
             createGradeDistributionChart(stats.grade_distribution);
-            
+
             // Create ground truth comparison chart if available
             if (stats.ground_truth_comparison && stats.ground_truth_comparison.total_compared > 0) {
                 createComparisonChart(results.individual_results);
                 createMetricComparisonChart(results.individual_results);
                 createDeltaChart(results.individual_results);
             }
-            
+
             // Populate results table
             populateResultsTable(results.individual_results);
-            
+
             finalizeBatch();
         }
 
         function createScoreDistributionChart(results) {
             const ctx = document.getElementById('scoreDistChart').getContext('2d');
-            
+
             if (charts.scoreDist) charts.scoreDist.destroy();
-            
+
             charts.scoreDist = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -718,13 +718,13 @@
                         legend: { labels: { color: '#eee' } }
                     },
                     scales: {
-                        y: { 
-                            beginAtZero: true, 
+                        y: {
+                            beginAtZero: true,
                             max: 100,
                             ticks: { color: '#eee' },
                             grid: { color: '#333' }
                         },
-                        x: { 
+                        x: {
                             ticks: { color: '#eee' },
                             grid: { color: '#333' }
                         }
@@ -735,13 +735,13 @@
 
         function createMetricScoresChart(metrics) {
             const ctx = document.getElementById('metricScoresChart').getContext('2d');
-            
+
             if (charts.metricScores) charts.metricScores.destroy();
-            
+
             charts.metricScores = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: ['Functional\nCompleteness', 'Variable\nFidelity', 'State\nMachine', 
+                    labels: ['Functional\nCompleteness', 'Variable\nFidelity', 'State\nMachine',
                              'Business\nLogic', 'Code\nQuality'],
                     datasets: [{
                         label: 'Average Score',
@@ -767,13 +767,13 @@
                         legend: { labels: { color: '#eee' } }
                     },
                     scales: {
-                        y: { 
-                            beginAtZero: true, 
+                        y: {
+                            beginAtZero: true,
                             max: 100,
                             ticks: { color: '#eee' },
                             grid: { color: '#333' }
                         },
-                        x: { 
+                        x: {
                             ticks: { color: '#eee' },
                             grid: { color: '#333' }
                         }
@@ -784,12 +784,12 @@
 
         function createGradeDistributionChart(gradeDist) {
             const ctx = document.getElementById('gradeDistChart').getContext('2d');
-            
+
             if (charts.gradeDist) charts.gradeDist.destroy();
-            
+
             const grades = ['A', 'B', 'C', 'D', 'F'];
             const counts = grades.map(g => gradeDist[g] || 0);
-            
+
             charts.gradeDist = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -817,21 +817,21 @@
         function createComparisonChart(results) {
             // Filter results that have ground truth scores
             const withGT = results.filter(r => r.ground_truth_score !== null && r.ground_truth_score !== undefined);
-            
+
             if (withGT.length === 0) {
                 console.log('No ground truth data available for comparison chart');
                 return;
             }
-            
+
             console.log(`Creating comparison chart with ${withGT.length} contracts`);
-            
+
             // Show the chart container
             document.getElementById('comparisonChartContainer').style.display = 'block';
-            
+
             const ctx = document.getElementById('comparisonChart').getContext('2d');
-            
+
             if (charts.comparison) charts.comparison.destroy();
-            
+
             charts.comparison = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -856,7 +856,7 @@
                 options: {
                     responsive: true,
                     plugins: {
-                        legend: { 
+                        legend: {
                             labels: { color: '#eee' },
                             display: true,
                             position: 'top'
@@ -876,8 +876,8 @@
                         }
                     },
                     scales: {
-                        y: { 
-                            beginAtZero: true, 
+                        y: {
+                            beginAtZero: true,
                             max: 100,
                             ticks: { color: '#eee' },
                             grid: { color: '#333' },
@@ -887,7 +887,7 @@
                                 color: '#eee'
                             }
                         },
-                        x: { 
+                        x: {
                             ticks: { color: '#eee' },
                             grid: { color: '#333' },
                             title: {
@@ -904,11 +904,11 @@
         function createMetricComparisonChart(results) {
             // Filter results that have ground truth scores
             const withGT = results.filter(r => r.ground_truth_score !== null && r.ground_truth_score !== undefined);
-            
+
             if (withGT.length === 0) return;
-            
+
             console.log('Creating metric comparison chart');
-            
+
             // Calculate average metrics for generated and ground truth
             const avgGenerated = {
                 funcComplete: 0,
@@ -917,7 +917,7 @@
                 businessLogic: 0,
                 codeQuality: 0
             };
-            
+
             const avgGroundTruth = {
                 funcComplete: 0,
                 varFidelity: 0,
@@ -925,14 +925,14 @@
                 businessLogic: 0,
                 codeQuality: 0
             };
-            
+
             withGT.forEach(r => {
                 avgGenerated.funcComplete += r.metrics.functional_completeness;
                 avgGenerated.varFidelity += r.metrics.variable_fidelity;
                 avgGenerated.stateMachine += r.metrics.state_machine;
                 avgGenerated.businessLogic += r.metrics.business_logic;
                 avgGenerated.codeQuality += r.metrics.code_quality;
-                
+
                 // Ground truth metrics (need to add these to the response)
                 if (r.ground_truth_metrics) {
                     avgGroundTruth.funcComplete += r.ground_truth_metrics.functional_completeness || 0;
@@ -942,20 +942,20 @@
                     avgGroundTruth.codeQuality += r.ground_truth_metrics.code_quality || 0;
                 }
             });
-            
+
             const count = withGT.length;
             Object.keys(avgGenerated).forEach(key => {
                 avgGenerated[key] /= count;
                 avgGroundTruth[key] /= count;
             });
-            
+
             // Show the chart container
             document.getElementById('metricComparisonContainer').style.display = 'block';
-            
+
             const ctx = document.getElementById('metricComparisonChart').getContext('2d');
-            
+
             if (charts.metricComparison) charts.metricComparison.destroy();
-            
+
             charts.metricComparison = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -992,15 +992,15 @@
                 options: {
                     responsive: true,
                     plugins: {
-                        legend: { 
+                        legend: {
                             labels: { color: '#eee' },
                             display: true,
                             position: 'top'
                         }
                     },
                     scales: {
-                        y: { 
-                            beginAtZero: true, 
+                        y: {
+                            beginAtZero: true,
                             max: 100,
                             ticks: { color: '#eee' },
                             grid: { color: '#333' },
@@ -1010,7 +1010,7 @@
                                 color: '#eee'
                             }
                         },
-                        x: { 
+                        x: {
                             ticks: { color: '#eee' },
                             grid: { color: '#333' }
                         }
@@ -1022,21 +1022,21 @@
         function createDeltaChart(results) {
             // Filter results that have ground truth scores
             const withGT = results.filter(r => r.ground_truth_score !== null && r.ground_truth_score !== undefined && r.score_delta !== null);
-            
+
             if (withGT.length === 0) return;
-            
+
             console.log('Creating delta chart');
-            
+
             // Show the chart container
             document.getElementById('deltaChartContainer').style.display = 'block';
-            
+
             const ctx = document.getElementById('deltaChart').getContext('2d');
-            
+
             if (charts.delta) charts.delta.destroy();
-            
+
             // Create color array based on positive/negative deltas
             const colors = withGT.map(r => r.score_delta >= 0 ? '#00ff88' : '#ff6b6b');
-            
+
             charts.delta = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -1054,7 +1054,7 @@
                 options: {
                     responsive: true,
                     plugins: {
-                        legend: { 
+                        legend: {
                             labels: { color: '#eee' },
                             display: true,
                             position: 'top'
@@ -1070,7 +1070,7 @@
                         }
                     },
                     scales: {
-                        y: { 
+                        y: {
                             ticks: { color: '#eee' },
                             grid: { color: '#333' },
                             title: {
@@ -1079,7 +1079,7 @@
                                 color: '#eee'
                             }
                         },
-                        x: { 
+                        x: {
                             ticks: { color: '#eee' },
                             grid: { color: '#333' },
                             title: {
@@ -1096,7 +1096,7 @@
         function populateResultsTable(results) {
             const tbody = document.getElementById('resultsTableBody');
             tbody.innerHTML = '';
-            
+
             results.forEach(result => {
                 // Format compilation status
                 let compileStatus = '?';
@@ -1108,12 +1108,12 @@
                     compileStatus = 'No';
                     compileColor = '#ff6b6b';
                 }
-                
+
                 // Format ground truth score
-                const gtScore = result.ground_truth_score !== null && result.ground_truth_score !== undefined 
-                    ? result.ground_truth_score.toFixed(1) 
+                const gtScore = result.ground_truth_score !== null && result.ground_truth_score !== undefined
+                    ? result.ground_truth_score.toFixed(1)
                     : '--';
-                
+
                 // Format delta
                 let deltaText = '--';
                 let deltaColor = '#888';
@@ -1121,7 +1121,7 @@
                     deltaText = `${result.score_delta > 0 ? '+' : ''}${result.score_delta.toFixed(1)}`;
                     deltaColor = result.score_delta > 0 ? '#00ff88' : (result.score_delta < 0 ? '#ff6b6b' : '#888');
                 }
-                
+
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>#${result.contract_id}</td>

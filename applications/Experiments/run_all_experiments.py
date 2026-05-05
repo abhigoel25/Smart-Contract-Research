@@ -34,13 +34,14 @@ Estimated API cost (at gpt-4o-mini pricing ~$0.15/1M input tokens):
   TOTAL                                   ≈ $15–30
 """
 
-import sys
-import os
-import time
 import argparse
+import os
 import subprocess
-from pathlib import Path
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
+
 # Load .env from applications/ before anything else so OPENAI_API_KEY is available
 _env_file = Path(__file__).resolve().parents[1] / ".env"
 if _env_file.exists():
@@ -111,19 +112,40 @@ def main():
     parser.add_argument(
         "--experiments",
         nargs="+",
-        default=["gt_compilation", "ablation", "slither", "temperature", "debiased", "contract_type", "tables"],
-        choices=["gt_compilation", "ablation", "slither", "temperature", "debiased", "contract_type", "tables"],
+        default=[
+            "gt_compilation",
+            "ablation",
+            "slither",
+            "temperature",
+            "debiased",
+            "contract_type",
+            "tables",
+        ],
+        choices=[
+            "gt_compilation",
+            "ablation",
+            "slither",
+            "temperature",
+            "debiased",
+            "contract_type",
+            "tables",
+        ],
         help="Which experiments to run (default: all)",
     )
     # Sample size overrides for quick testing
-    parser.add_argument("--ablation_n",    type=int, default=300)
-    parser.add_argument("--slither_n",     type=int, default=200)
+    parser.add_argument("--ablation_n", type=int, default=300)
+    parser.add_argument("--slither_n", type=int, default=200)
     parser.add_argument("--temperature_n", type=int, default=100)
-    parser.add_argument("--debiased_n",    type=int, default=200)
-    parser.add_argument("--gt_n",          type=int, default=-1,
-                        help="-1 = all ground-truth contracts")
-    parser.add_argument("--ct_n",          type=int, default=30,
-                        help="Contracts per category for experiment 6 (default: 30)")
+    parser.add_argument("--debiased_n", type=int, default=200)
+    parser.add_argument(
+        "--gt_n", type=int, default=-1, help="-1 = all ground-truth contracts"
+    )
+    parser.add_argument(
+        "--ct_n",
+        type=int,
+        default=30,
+        help="Contracts per category for experiment 6 (default: 30)",
+    )
     # Ablation conditions
     parser.add_argument(
         "--ablation_conditions",
@@ -179,9 +201,12 @@ def main():
         ok = run_experiment(
             "experiment_2_ground_truth_compilation.py",
             [
-                "--dataset",    args.dataset,
-                "--n_samples",  str(args.gt_n),
-                "--output_dir", str(output_dir / "gt_compilation"),
+                "--dataset",
+                args.dataset,
+                "--n_samples",
+                str(args.gt_n),
+                "--output_dir",
+                str(output_dir / "gt_compilation"),
             ],
             "Experiment 2: Ground-Truth Compilation Rate",
         )
@@ -192,12 +217,18 @@ def main():
         ok = run_experiment(
             "experiment_1_ablation.py",
             [
-                "--dataset",    args.dataset,
-                "--n_samples",  str(args.ablation_n),
-                "--output_dir", str(output_dir / "ablation"),
-                "--conditions", *args.ablation_conditions,
-                "--seeds",      *[str(s) for s in args.ablation_seeds],
-                "--model",      args.model,
+                "--dataset",
+                args.dataset,
+                "--n_samples",
+                str(args.ablation_n),
+                "--output_dir",
+                str(output_dir / "ablation"),
+                "--conditions",
+                *args.ablation_conditions,
+                "--seeds",
+                *[str(s) for s in args.ablation_seeds],
+                "--model",
+                args.model,
             ],
             "Experiment 1: Ablation Study",
         )
@@ -208,10 +239,14 @@ def main():
         ok = run_experiment(
             "experiment_4_slither.py",
             [
-                "--dataset",    args.dataset,
-                "--n_samples",  str(args.slither_n),
-                "--output_dir", str(output_dir / "slither"),
-                "--model",      args.model,
+                "--dataset",
+                args.dataset,
+                "--n_samples",
+                str(args.slither_n),
+                "--output_dir",
+                str(output_dir / "slither"),
+                "--model",
+                args.model,
             ],
             "Experiment 4: Slither External Validation",
         )
@@ -222,11 +257,16 @@ def main():
         ok = run_experiment(
             "experiment_3_temperature.py",
             [
-                "--dataset",      args.dataset,
-                "--n_samples",    str(args.temperature_n),
-                "--temperatures", *[str(t) for t in args.temperatures],
-                "--output_dir",   str(output_dir / "temperature"),
-                "--model",        args.model,
+                "--dataset",
+                args.dataset,
+                "--n_samples",
+                str(args.temperature_n),
+                "--temperatures",
+                *[str(t) for t in args.temperatures],
+                "--output_dir",
+                str(output_dir / "temperature"),
+                "--model",
+                args.model,
             ],
             "Experiment 3: Temperature Sensitivity",
         )
@@ -235,10 +275,14 @@ def main():
     # ── Experiment 5: Debiased metric ────────────────────────────────────────
     if "debiased" in args.experiments:
         debiased_args = [
-            "--dataset",    args.dataset,
-            "--n_samples",  str(args.debiased_n),
-            "--output_dir", str(output_dir / "debiased"),
-            "--model",      args.model,
+            "--dataset",
+            args.dataset,
+            "--n_samples",
+            str(args.debiased_n),
+            "--output_dir",
+            str(output_dir / "debiased"),
+            "--model",
+            args.model,
         ]
         # Point to ablation condition C results if they exist
         cond_c = output_dir / "ablation" / "condition_C_iter1.jsonl"
@@ -259,10 +303,14 @@ def main():
         ok = run_experiment(
             "experiment_6_contract_type.py",
             [
-                "--dataset",        args.dataset,
-                "--n_per_category", str(args.ct_n),
-                "--output_dir",     str(output_dir / "contract_type"),
-                "--model",          args.model,
+                "--dataset",
+                args.dataset,
+                "--n_per_category",
+                str(args.ct_n),
+                "--output_dir",
+                str(output_dir / "contract_type"),
+                "--model",
+                args.model,
             ],
             "Experiment 6: Cross-Contract-Type Generalization",
         )
@@ -273,8 +321,10 @@ def main():
         ok = run_experiment(
             "generate_rebuttal_tables.py",
             [
-                "--results_dir", str(output_dir),
-                "--output_dir",  str(output_dir),
+                "--results_dir",
+                str(output_dir),
+                "--output_dir",
+                str(output_dir),
             ],
             "Table Generation",
         )
@@ -303,5 +353,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n⚠ Run cancelled by user (Ctrl+C).")
         print("  Any fully completed contracts have been saved incrementally to disk.")
-        print("  Re-run with --ablation_conditions <remaining> to continue from where you left off.")
+        print(
+            "  Re-run with --ablation_conditions <remaining> to continue from where you left off."
+        )
         sys.exit(0)

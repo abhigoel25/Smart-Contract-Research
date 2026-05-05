@@ -11,20 +11,22 @@ Handles:
 - Compilation checking wrapper
 """
 
-import os
-import sys
 import json
 import math
-import time
+import os
 import random
-import tempfile
-import traceback
 import statistics
+import sys
+import tempfile
+import time
+import traceback
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from scipy.stats import ttest_rel, wilcoxon as _wilcoxon  # type: ignore
+    from scipy.stats import ttest_rel
+    from scipy.stats import wilcoxon as _wilcoxon  # type: ignore
+
     _SCIPY_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _SCIPY_AVAILABLE = False
@@ -49,10 +51,10 @@ if _env_file.exists():
 from applications.solidity_compiler import SolidityCompilationChecker
 from applications.task_builders import create_quality_evaluation_task_description
 
-
 # ────────────────────────────────────────────────────────────────────────────
 # Dataset loading
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def load_dataset(
     jsonl_path: str,
@@ -82,8 +84,15 @@ def load_dataset(
                 continue
             try:
                 obj = json.loads(line)
-                req = obj.get(requirement_key) or obj.get("user_requirement") or obj.get("nl") or obj.get("description", "")
-                code = obj.get(code_key) or obj.get("solidity") or obj.get("contract", "")
+                req = (
+                    obj.get(requirement_key)
+                    or obj.get("user_requirement")
+                    or obj.get("nl")
+                    or obj.get("description", "")
+                )
+                code = (
+                    obj.get(code_key) or obj.get("solidity") or obj.get("contract", "")
+                )
                 if req and code:
                     records.append({"index": idx, "requirement": req, "code": code})
             except json.JSONDecodeError:
@@ -102,6 +111,7 @@ def load_dataset(
 # ────────────────────────────────────────────────────────────────────────────
 # Pipeline execution helper
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def process_single_contract(
     translator,
@@ -134,7 +144,7 @@ def process_single_contract(
 
     result = {
         "index": contract_index,
-        "requirement": requirement[:200],          # truncate for storage
+        "requirement": requirement[:200],  # truncate for storage
         "ground_truth_code": ground_truth_code,
         "solidity": None,
         "audit": None,
@@ -150,25 +160,24 @@ def process_single_contract(
     try:
         for phase_result in translator.translate_contract_streaming(
             input_path=tmp_path,
-            output_dir=tempfile.mkdtemp(),   # throwaway output dir
-            require_audit_approval=False,     # never prompt in batch mode
+            output_dir=tempfile.mkdtemp(),  # throwaway output dir
+            require_audit_approval=False,  # never prompt in batch mode
             generate_mcp_server=generate_mcp,
             use_agentic_pipeline=True,
         ):
             phase = phase_result.get("phase")
-            data  = phase_result.get("data", {})
+            data = phase_result.get("data", {})
 
-            if phase == 2:   # Contract parsing / schema extraction
+            if phase == 2:  # Contract parsing / schema extraction
                 result["schema"] = data.get("schema")
-            elif phase == 3:   # Solidity generation
+            elif phase == 3:  # Solidity generation
                 result["solidity"] = data.get("solidity")
-            elif phase == 4: # Audit (may fire multiple times during refinement)
+            elif phase == 4:  # Audit (may fire multiple times during refinement)
                 result["audit"] = data
-            elif phase == 7: # Quality evaluation
+            elif phase == 7:  # Quality evaluation
                 result["quality_evaluation"] = data.get("quality_evaluation")
-                result["compilation"] = (
-                    data.get("quality_evaluation", {})
-                        .get("compilation_check")
+                result["compilation"] = data.get("quality_evaluation", {}).get(
+                    "compilation_check"
                 )
 
     except Exception as exc:
@@ -192,10 +201,10 @@ def process_single_contract(
     # ── Evaluate ground-truth quality with the same metric as generated code ─
     # This is critical: without evaluating GT with the same rubric we cannot
     # make a valid comparison between generated and expert-written contracts.
-    if ground_truth_code and hasattr(translator, 'quality_evaluator_agent'):
+    if ground_truth_code and hasattr(translator, "quality_evaluator_agent"):
         result["ground_truth_quality_evaluation"] = evaluate_ground_truth_quality(
             ground_truth_code=ground_truth_code,
-            schema=result.get("schema"),         # best-effort; may be None
+            schema=result.get("schema"),  # best-effort; may be None
             requirement=requirement,
             quality_evaluator_agent=translator.quality_evaluator_agent,
         )
@@ -231,7 +240,7 @@ def evaluate_ground_truth_quality(
         or None on failure.
     """
     try:
-        from crewai import Task, Crew
+        from crewai import Crew, Task
 
         # If schema was not passed, build a minimal placeholder so the prompt
         # still has a specification section to compare against.
@@ -260,11 +269,11 @@ def evaluate_ground_truth_quality(
         raw_text = str(raw_output)
 
         # Reuse the same JSON-extraction helper the translator uses
-        import re as _re
         import json as _json
+        import re as _re
 
         # Try to find a JSON block
-        json_match = _re.search(r'\{.*\}', raw_text, _re.DOTALL)
+        json_match = _re.search(r"\{.*\}", raw_text, _re.DOTALL)
         if json_match:
             return _json.loads(json_match.group())
         return None
@@ -278,6 +287,7 @@ def evaluate_ground_truth_quality(
 # Score / audit extraction helpers
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def extract_scores(quality_evaluation: Optional[Dict]) -> Dict[str, float]:
     """
     Pull m1–m5 and the composite score out of a quality_evaluation dict.
@@ -289,14 +299,16 @@ def extract_scores(quality_evaluation: Optional[Dict]) -> Dict[str, float]:
     if not quality_evaluation:
         return dict(m1=0.0, m2=0.0, m3=0.0, m4=0.0, m5=0.0, composite=0.0)
 
-    m1 = float(quality_evaluation.get("metric_1_functional_completeness", {}).get("score", 0))
-    m2 = float(quality_evaluation.get("metric_2_variable_fidelity",        {}).get("score", 0))
-    m3 = float(quality_evaluation.get("metric_3_state_machine",            {}).get("score", 0))
-    m4 = float(quality_evaluation.get("metric_4_business_logic",           {}).get("score", 0))
-    m5 = float(quality_evaluation.get("metric_5_code_quality",             {}).get("score", 0))
+    m1 = float(
+        quality_evaluation.get("metric_1_functional_completeness", {}).get("score", 0)
+    )
+    m2 = float(quality_evaluation.get("metric_2_variable_fidelity", {}).get("score", 0))
+    m3 = float(quality_evaluation.get("metric_3_state_machine", {}).get("score", 0))
+    m4 = float(quality_evaluation.get("metric_4_business_logic", {}).get("score", 0))
+    m5 = float(quality_evaluation.get("metric_5_code_quality", {}).get("score", 0))
 
     # Always recompute the composite deterministically (matches translator logic)
-    composite = round(m1*0.25 + m2*0.15 + m3*0.15 + m4*0.35 + m5*0.10, 2)
+    composite = round(m1 * 0.25 + m2 * 0.15 + m3 * 0.15 + m4 * 0.35 + m5 * 0.10, 2)
 
     return dict(m1=m1, m2=m2, m3=m3, m4=m4, m5=m5, composite=composite)
 
@@ -309,15 +321,13 @@ def extract_audit_info(audit_data: Optional[Dict]) -> Dict:
     if not audit_data:
         return dict(severity="unknown", approved=False, vuln_count=0, critical=0)
 
-    severity   = (audit_data.get("severity_level") or "unknown").lower()
-    approved   = bool(audit_data.get("approved", False))
-    vuln_count = int(audit_data.get("vulnerability_count") or
-                     len(audit_data.get("issues", [])))
-    issues     = audit_data.get("issues", [])
-    critical   = sum(
-        1 for i in issues
-        if isinstance(i, str) and "critical" in i.lower()
+    severity = (audit_data.get("severity_level") or "unknown").lower()
+    approved = bool(audit_data.get("approved", False))
+    vuln_count = int(
+        audit_data.get("vulnerability_count") or len(audit_data.get("issues", []))
     )
+    issues = audit_data.get("issues", [])
+    critical = sum(1 for i in issues if isinstance(i, str) and "critical" in i.lower())
     return dict(
         severity=severity,
         approved=approved,
@@ -336,6 +346,7 @@ def compilation_success(compilation_result: Optional[Dict]) -> Optional[bool]:
 # ────────────────────────────────────────────────────────────────────────────
 # Result persistence
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def save_results(results: List[Dict], output_path: str) -> None:
     """
@@ -370,6 +381,7 @@ def load_results(path: str) -> List[Dict]:
 # Pairwise Statistical Significance
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def get_raw_scores(results: List[Dict]) -> Dict[str, Any]:
     """
     Extract per-contract raw score lists (keyed by contract index) for
@@ -393,10 +405,14 @@ def get_raw_scores(results: List[Dict]) -> Dict[str, Any]:
             continue
         indices.append(r.get("index"))
         composites.append(s["composite"])
-        m1s.append(s["m1"]); m2s.append(s["m2"]); m3s.append(s["m3"])
-        m4s.append(s["m4"]); m5s.append(s["m5"])
-    return dict(indices=indices, composite=composites,
-                m1=m1s, m2=m2s, m3=m3s, m4=m4s, m5=m5s)
+        m1s.append(s["m1"])
+        m2s.append(s["m2"])
+        m3s.append(s["m3"])
+        m4s.append(s["m4"])
+        m5s.append(s["m5"])
+    return dict(
+        indices=indices, composite=composites, m1=m1s, m2=m2s, m3=m3s, m4=m4s, m5=m5s
+    )
 
 
 def _effect_size_label(d: float) -> str:
@@ -466,47 +482,47 @@ def compute_pairwise_significance(
     for metric in metrics:
         a_vals = [raw_a[metric][idx_a[idx]] for idx in common]
         b_vals = [raw_b[metric][idx_b[idx]] for idx in common]
-        diffs  = [b - a for a, b in zip(a_vals, b_vals)]
+        diffs = [b - a for a, b in zip(a_vals, b_vals)]
 
-        mean_a    = statistics.mean(a_vals)
-        mean_b    = statistics.mean(b_vals)
+        mean_a = statistics.mean(a_vals)
+        mean_b = statistics.mean(b_vals)
         mean_diff = statistics.mean(diffs)
-        std_diff  = statistics.stdev(diffs) if n > 1 else 0.0
-        cohens_d  = mean_diff / std_diff if std_diff > 0 else 0.0
+        std_diff = statistics.stdev(diffs) if n > 1 else 0.0
+        cohens_d = mean_diff / std_diff if std_diff > 0 else 0.0
 
         entry: Dict[str, Any] = {
-            "mean_a":       round(mean_a, 3),
-            "mean_b":       round(mean_b, 3),
-            "mean_diff":    round(mean_diff, 3),
-            "cohens_d":     round(cohens_d, 3),
-            "effect_size":  _effect_size_label(cohens_d),
+            "mean_a": round(mean_a, 3),
+            "mean_b": round(mean_b, 3),
+            "mean_diff": round(mean_diff, 3),
+            "cohens_d": round(cohens_d, 3),
+            "effect_size": _effect_size_label(cohens_d),
         }
 
         if _SCIPY_AVAILABLE:
             t_stat, p_t = ttest_rel(a_vals, b_vals)
-            entry["t_stat"]     = round(float(t_stat), 3)
-            entry["p_value_t"]  = round(float(p_t), 4)
-            entry["stars"]      = _sig_stars(float(p_t))
+            entry["t_stat"] = round(float(t_stat), 3)
+            entry["p_value_t"] = round(float(p_t), 4)
+            entry["stars"] = _sig_stars(float(p_t))
 
             if any(d != 0 for d in diffs):
                 w_stat, p_w = _wilcoxon(diffs)
-                entry["w_stat"]    = round(float(w_stat), 3)
+                entry["w_stat"] = round(float(w_stat), 3)
                 entry["p_value_w"] = round(float(p_w), 4)
             else:
-                entry["w_stat"]    = 0.0
+                entry["w_stat"] = 0.0
                 entry["p_value_w"] = 1.0
         else:
             # Fallback: manual t-statistic (no CDF available without scipy)
             if std_diff > 0:
                 t_stat = mean_diff / (std_diff / math.sqrt(n))
-                entry["t_stat"]  = round(t_stat, 3)
+                entry["t_stat"] = round(t_stat, 3)
                 entry["p_value_t"] = None
-                entry["stars"]   = "(?)"
-                entry["note"]    = "install scipy for exact p-values"
+                entry["stars"] = "(?)"
+                entry["note"] = "install scipy for exact p-values"
             else:
-                entry["t_stat"]  = 0.0
+                entry["t_stat"] = 0.0
                 entry["p_value_t"] = 1.0
-                entry["stars"]   = "   "
+                entry["stars"] = "   "
 
         output[metric] = entry
 
@@ -516,6 +532,7 @@ def compute_pairwise_significance(
 # ────────────────────────────────────────────────────────────────────────────
 # Statistics
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def classify_error_modes(quality_evaluation: Optional[Dict]) -> Dict[str, bool]:
     """
@@ -549,34 +566,36 @@ def classify_error_modes(quality_evaluation: Optional[Dict]) -> Dict[str, bool]:
         }
 
     scores = extract_scores(quality_evaluation)
-    m1, m2, m3, m4, m5 = scores["m1"], scores["m2"], scores["m3"], scores["m4"], scores["m5"]
+    m1, m2, m3, m4, m5 = (
+        scores["m1"],
+        scores["m2"],
+        scores["m3"],
+        scores["m4"],
+        scores["m5"],
+    )
 
     # Temporal logic: check if spec had dates but M4 temporal subscore is 0
     temporal_subscore = (
-        quality_evaluation
-        .get("metric_4_business_logic", {})
+        quality_evaluation.get("metric_4_business_logic", {})
         .get("temporal_logic", {})
         .get("points", None)
     )
     total_dates = (
-        quality_evaluation
-        .get("metric_4_business_logic", {})
+        quality_evaluation.get("metric_4_business_logic", {})
         .get("temporal_logic", {})
         .get("total_dates", 0)
     )
 
     # M1 implementation quality: missing access control signal
     m1_missing_access_ctrl = bool(
-        quality_evaluation
-        .get("metric_1_functional_completeness", {})
+        quality_evaluation.get("metric_1_functional_completeness", {})
         .get("implementation_quality", {})
         .get("missing_access_control", [])
     )
 
     # M4 financial: any missing financial logic?
     financial_missing = bool(
-        quality_evaluation
-        .get("metric_4_business_logic", {})
+        quality_evaluation.get("metric_4_business_logic", {})
         .get("financial_logic", {})
         .get("missing_financial_logic", [])
     )
@@ -584,14 +603,14 @@ def classify_error_modes(quality_evaluation: Optional[Dict]) -> Dict[str, bool]:
     composite = scores["composite"]
 
     return {
-        "logic_omission":       m1 < 60,
+        "logic_omission": m1 < 60,
         "state_transition_err": m3 < 60,
-        "access_control_fail":  m1_missing_access_ctrl and m4 < 70,
-        "economic_logic_err":   financial_missing or (m4 < 60),
-        "naming_deviation":     m2 < 70,
-        "temporal_logic_miss":  (total_dates > 0 and temporal_subscore == 0),
-        "code_quality_low":     m5 < 50,
-        "fully_correct":        composite >= 80,
+        "access_control_fail": m1_missing_access_ctrl and m4 < 70,
+        "economic_logic_err": financial_missing or (m4 < 60),
+        "naming_deviation": m2 < 70,
+        "temporal_logic_miss": (total_dates > 0 and temporal_subscore == 0),
+        "code_quality_low": m5 < 50,
+        "fully_correct": composite >= 80,
     }
 
 
@@ -656,8 +675,8 @@ def compute_statistics(results: List[Dict]) -> Dict:
             return {"mean": None, "std": None, "n": 0}
         return {
             "mean": round(statistics.mean(vals), 3),
-            "std":  round(statistics.stdev(vals), 3) if len(vals) > 1 else 0.0,
-            "n":    len(vals),
+            "std": round(statistics.stdev(vals), 3) if len(vals) > 1 else 0.0,
+            "n": len(vals),
         }
 
     n_valid = len(results) - errors
@@ -667,28 +686,34 @@ def compute_statistics(results: List[Dict]) -> Dict:
     }
 
     return {
-        "n_total":           len(results),
-        "n_errors":          errors,
+        "n_total": len(results),
+        "n_errors": errors,
         # Generated contract quality
-        "composite":         _stat(composites),
-        "m1_functional":     _stat(m1s),
-        "m2_variable":       _stat(m2s),
-        "m3_state_machine":  _stat(m3s),
+        "composite": _stat(composites),
+        "m1_functional": _stat(m1s),
+        "m2_variable": _stat(m2s),
+        "m3_state_machine": _stat(m3s),
         "m4_business_logic": _stat(m4s),
-        "m5_code_quality":   _stat(m5s),
+        "m5_code_quality": _stat(m5s),
         # Ground-truth contract quality (parallel evaluation under same rubric)
-        "gt_composite":      _stat(gt_composites),
-        "gt_m1_functional":  _stat(gt_m1s),
-        "gt_m2_variable":    _stat(gt_m2s),
+        "gt_composite": _stat(gt_composites),
+        "gt_m1_functional": _stat(gt_m1s),
+        "gt_m2_variable": _stat(gt_m2s),
         "gt_m3_state_machine": _stat(gt_m3s),
         "gt_m4_business_logic": _stat(gt_m4s),
         "gt_m5_code_quality": _stat(gt_m5s),
         # Compilation rates
-        "compilation_rate":  round(sum(compiled)    / len(compiled),    4) if compiled    else None,
-        "gt_compilation_rate": round(sum(gt_compiled) / len(gt_compiled), 4) if gt_compiled else None,
+        "compilation_rate": (
+            round(sum(compiled) / len(compiled), 4) if compiled else None
+        ),
+        "gt_compilation_rate": (
+            round(sum(gt_compiled) / len(gt_compiled), 4) if gt_compiled else None
+        ),
         # Error mode breakdown (addresses [How are errors assessed?] placeholder)
-        "error_mode_rates":  error_mode_rates,
-        "avg_processing_s":  round(statistics.mean(processing_times), 2) if processing_times else None,
+        "error_mode_rates": error_mode_rates,
+        "avg_processing_s": (
+            round(statistics.mean(processing_times), 2) if processing_times else None
+        ),
     }
 
 
@@ -705,7 +730,7 @@ def print_stats_table(label: str, stats: Dict) -> None:
 
     def _fmtpair(gen_key: str, gt_key: str) -> str:
         gen = _fmt(stats.get(gen_key))
-        gt  = _fmt(stats.get(gt_key))
+        gt = _fmt(stats.get(gt_key))
         if gt == "N/A":
             return gen
         delta = None
@@ -721,15 +746,29 @@ def print_stats_table(label: str, stats: Dict) -> None:
     print(f"  {'Composite score':<22} {_fmtpair('composite', 'gt_composite')}")
     print(f"  {'M1 Functional':<22} {_fmtpair('m1_functional', 'gt_m1_functional')}")
     print(f"  {'M2 Variable':<22} {_fmtpair('m2_variable', 'gt_m2_variable')}")
-    print(f"  {'M3 State Machine':<22} {_fmtpair('m3_state_machine', 'gt_m3_state_machine')}")
-    print(f"  {'M4 Business Logic':<22} {_fmtpair('m4_business_logic', 'gt_m4_business_logic')}")
-    print(f"  {'M5 Code Quality':<22} {_fmtpair('m5_code_quality', 'gt_m5_code_quality')}")
+    print(
+        f"  {'M3 State Machine':<22} {_fmtpair('m3_state_machine', 'gt_m3_state_machine')}"
+    )
+    print(
+        f"  {'M4 Business Logic':<22} {_fmtpair('m4_business_logic', 'gt_m4_business_logic')}"
+    )
+    print(
+        f"  {'M5 Code Quality':<22} {_fmtpair('m5_code_quality', 'gt_m5_code_quality')}"
+    )
 
     print()
     cr = stats.get("compilation_rate")
-    print(f"  Compilation rate : {cr*100:.1f}%" if cr is not None else "  Compilation rate : N/A")
+    print(
+        f"  Compilation rate : {cr*100:.1f}%"
+        if cr is not None
+        else "  Compilation rate : N/A"
+    )
     gtcr = stats.get("gt_compilation_rate")
-    print(f"  GT compile rate  : {gtcr*100:.1f}%" if gtcr is not None else "  GT compile rate  : N/A")
+    print(
+        f"  GT compile rate  : {gtcr*100:.1f}%"
+        if gtcr is not None
+        else "  GT compile rate  : N/A"
+    )
     t = stats.get("avg_processing_s")
     print(f"  Avg time/contract: {t:.1f}s" if t else "  Avg time/contract: N/A")
 
@@ -738,14 +777,14 @@ def print_stats_table(label: str, stats: Dict) -> None:
     if em:
         print(f"\n  Error Mode Rates (fraction of contracts):")
         mode_labels = {
-            "logic_omission":       "Logic Omission (M1<60)",
+            "logic_omission": "Logic Omission (M1<60)",
             "state_transition_err": "State Transition Error (M3<60)",
-            "access_control_fail":  "Access Control Failure",
-            "economic_logic_err":   "Economic Logic Error (M4<60)",
-            "naming_deviation":     "Naming Deviation (M2<70)",
-            "temporal_logic_miss":  "Temporal Logic Missing",
-            "code_quality_low":     "Code Quality Low (M5<50)",
-            "fully_correct":        "Fully Correct (composite≥80)",
+            "access_control_fail": "Access Control Failure",
+            "economic_logic_err": "Economic Logic Error (M4<60)",
+            "naming_deviation": "Naming Deviation (M2<70)",
+            "temporal_logic_miss": "Temporal Logic Missing",
+            "code_quality_low": "Code Quality Low (M5<50)",
+            "fully_correct": "Fully Correct (composite≥80)",
         }
         for mode, lbl in mode_labels.items():
             rate = em.get(mode)
